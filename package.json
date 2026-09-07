@@ -1,0 +1,43 @@
+{
+  "name": "ip-sakti-sahayak",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "worker": "node src/workers/ingestion.worker.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "seed": "node scripts/seed.js",
+    "seed:demo": "node scripts/seed-demo-accounts.js",
+    "seed:legal": "node scripts/seed-legal-corpus.js",
+    "setup:vector-index": "node scripts/ensure-vector-index.js",
+    "dashboard:dev": "npm --prefix dashboard run dev",
+    "dashboard:build": "npm --prefix dashboard run build"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/multipart": "^9.2.1",
+    "@fastify/rate-limit": "^10.3.0",
+    "bcryptjs": "^3.0.2",
+    "cheerio": "^1.1.2",
+    "fastify": "^5.4.0",
+    "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.10.0",
+    "mongoose": "^8.17.1",
+    "openai": "^5.12.2",
+    "pdf-parse": "^1.1.1",
+    "pdfkit": "^0.20.1",
+    "sanitize-filename": "^1.6.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  }
+}

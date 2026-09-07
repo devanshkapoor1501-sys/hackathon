@@ -1,0 +1,11 @@
+{
+  "name": "knowledge_vector_index",
+  "type": "vectorSearch",
+  "definition": {
+    "fields": [
+      { "type": "vector", "path": "embedding", "numDimensions": 2048, "similarity": "cosine" },
+      { "type": "filter", "path": "organizationId" },
+      { "type": "filter", "path": "botId" }
+    ]
+  }
+}

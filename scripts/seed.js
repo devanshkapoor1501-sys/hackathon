@@ -1,0 +1,20 @@
+import bcrypt from 'bcryptjs';
+import { connectDatabase, disconnectDatabase } from '../src/db/mongoose.js';
+import { User, Organization, OrganizationMember, Bot, AllowedDomain, KnowledgeSource, Subscription } from '../src/models/index.js';
+import { randomId, sha256 } from '../src/utils/security.js';
+
+await connectDatabase();
+const email = process.env.SEED_EMAIL || 'owner@northstar.test';
+let user = await User.findOne({ email });
+if (!user) user = await User.create({ name: 'Alex Morgan', email, passwordHash: await bcrypt.hash(process.env.SEED_PASSWORD || 'ChangeMe123!', 12), emailVerifiedAt: new Date() });
+let organization = await Organization.findOne({ slug: 'northstar-demo' });
+if (!organization) organization = await Organization.create({ name: 'Northstar Commerce', slug: 'northstar-demo', createdBy: user._id });
+await OrganizationMember.updateOne({ organizationId: organization._id, userId: user._id }, { $setOnInsert: { role: 'owner', status: 'active' } }, { upsert: true });
+await Subscription.updateOne({ organizationId: organization._id }, { $setOnInsert: { plan: 'starter', status: 'trialing' } }, { upsert: true });
+let bot = await Bot.findOne({ organizationId: organization._id, name: 'Northstar Guide' });
+if (!bot) bot = await Bot.create({ organizationId: organization._id, publicId: randomId('bot_'), name: 'Northstar Guide', welcomeMessage: 'Hi! Ask me about shipping, returns, and product care.', supportEmail: 'support@northstar.test' });
+await AllowedDomain.updateOne({ organizationId: organization._id, botId: bot._id, hostname: 'localhost' }, { $setOnInsert: { enabled: true } }, { upsert: true });
+const faqEntries = [{ question: 'What is the return window?', answer: 'Unused items can be returned within 30 calendar days of delivery with the original receipt.' }, { question: 'How long does standard shipping take?', answer: 'Standard shipping normally arrives within 3–5 business days after dispatch.' }];
+await KnowledgeSource.updateOne({ organizationId: organization._id, botId: bot._id, contentHash: sha256(JSON.stringify(faqEntries)) }, { $setOnInsert: { type: 'faq', name: 'Starter FAQs', faqEntries, status: 'queued' } }, { upsert: true });
+console.log(JSON.stringify({ email, password: process.env.SEED_PASSWORD || 'ChangeMe123!', organizationId: organization._id, botPublicId: bot.publicId }, null, 2));
+await disconnectDatabase();

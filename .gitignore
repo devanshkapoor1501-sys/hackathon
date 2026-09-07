@@ -1,0 +1,9 @@
+node_modules/
+dashboard/node_modules/
+dashboard/dist/
+.runtime/
+.env
+uploads/
+coverage/
+*.log
+.DS_Store

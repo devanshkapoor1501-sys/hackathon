@@ -1,0 +1,38 @@
+openapi: 3.1.0
+info: { title: Aiden Support API, version: 1.0.0 }
+servers: [{ url: http://localhost:3000 }]
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+paths:
+  /health:
+    get: { summary: Liveness, responses: { '200': { description: Healthy } } }
+  /ready:
+    get: { summary: MongoDB readiness, responses: { '200': { description: Ready }, '503': { description: MongoDB unavailable } } }
+  /api/auth/register:
+    post: { summary: Register a user, responses: { '200': { description: Registered } } }
+  /api/auth/login:
+    post: { summary: Login and set refresh cookie, responses: { '200': { description: Authenticated } } }
+  /api/auth/refresh:
+    post: { summary: Rotate refresh token, responses: { '200': { description: Rotated } } }
+  /api/auth/logout:
+    post: { summary: Revoke refresh token, responses: { '200': { description: Revoked } } }
+  /api/auth/me:
+    get: { summary: Current user, security: [{ bearerAuth: [] }], responses: { '200': { description: User } } }
+  /api/organizations:
+    get: { summary: List memberships, security: [{ bearerAuth: [] }], responses: { '200': { description: Memberships } } }
+    post: { summary: Create organization, security: [{ bearerAuth: [] }], responses: { '200': { description: Organization } } }
+  /api/organizations/{organizationId}/bots:
+    get: { summary: List bots, security: [{ bearerAuth: [] }], responses: { '200': { description: Bots } } }
+    post: { summary: Create bot, security: [{ bearerAuth: [] }], responses: { '200': { description: Bot } } }
+  /api/organizations/{organizationId}/bots/{botId}/sources:
+    get: { summary: List knowledge sources, security: [{ bearerAuth: [] }], responses: { '200': { description: Sources } } }
+    post: { summary: Add text, FAQ, or URL source, security: [{ bearerAuth: [] }], responses: { '200': { description: Queued source } } }
+  /api/organizations/{organizationId}/conversations:
+    get: { summary: List conversations, security: [{ bearerAuth: [] }], responses: { '200': { description: Conversations } } }
+  /api/organizations/{organizationId}/analytics:
+    get: { summary: Usage and support analytics, security: [{ bearerAuth: [] }], responses: { '200': { description: Analytics } } }
+  /api/public/widget/{publicId}/config:
+    get: { summary: Domain-validated widget config, responses: { '200': { description: Public-safe config } } }
+  /api/public/widget/{publicId}/chat:
+    post: { summary: Stream grounded answer over SSE, responses: { '200': { description: SSE stream } } }
