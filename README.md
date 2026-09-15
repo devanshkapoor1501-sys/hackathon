@@ -53,6 +53,8 @@ LLM_PROVIDER=none
 
 Keep secrets only in `.env`; never commit that file. For a production deployment, replace the placeholder JWT, cookie, and encryption secrets with fresh values.
 
+`LLM_PROVIDER=none` intentionally keeps this local setup fully offline. In that mode the dashboard may show **LLM: Offline** and the assessment uses deterministic, non-fabricated output.
+
 ### 3. Start MongoDB
 
 In the repository root:
@@ -100,7 +102,7 @@ AI is opt-in and the browser never receives provider credentials. The hybrid cha
 
 `NVIDIA → Gemini → LM Studio → deterministic mode`
 
-Enable it with:
+Enable the backup chain with:
 
 ```dotenv
 LLM_PROVIDER=hybrid
@@ -108,7 +110,19 @@ NVIDIA_API_KEY=your-nvidia-key
 GEMINI_API_KEY=your-google-ai-studio-key
 ```
 
-Gemini is attempted only when `GEMINI_API_KEY` is present. To use Gemini directly, set `LLM_PROVIDER=gemini`. To stay fully offline, use `LLM_PROVIDER=none`.
+The provider order is `NVIDIA → Gemini → LM Studio → deterministic mode`. Gemini is attempted only when `GEMINI_API_KEY` is present; the application does not make a Gemini request when the key is empty. If NVIDIA is unavailable and Gemini is configured, Gemini is the backup provider.
+
+To use Gemini directly instead of the hybrid chain:
+
+```dotenv
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your-google-ai-studio-key
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+GEMINI_CHAT_MODEL=gemini-3.6-flash
+GEMINI_REASONING_EFFORT=low
+```
+
+Get the key from [Google AI Studio](https://aistudio.google.com/app/apikey). Store it only in `.env`, restart the backend after changing it, and never paste it into source files or commit it.
 
 For LM Studio, start its local OpenAI-compatible server and set:
 
@@ -118,7 +132,20 @@ LMSTUDIO_BASE_URL=http://localhost:1234/v1
 LMSTUDIO_MODEL=your-local-chat-model
 ```
 
-After changing `.env`, restart the backend and inspect `/health/llm` for `providerAttempts`, `activeProvider`, and the current offline/fallback status.
+After changing `.env`, restart the backend and inspect `/health/llm` for `providerAttempts`, `activeProvider`, and the current offline/fallback status:
+
+```powershell
+$llm = Invoke-RestMethod http://localhost:3000/health/llm
+$llm | Select-Object provider,status,connectivity,activeProvider,reason
+$llm.providerAttempts | Select-Object provider,status,connected,reason
+```
+
+Expected behavior:
+
+- `provider=hybrid` with a valid Gemini key: Gemini appears as a configured provider and can be selected after an NVIDIA failure.
+- `CONFIG_MISSING` for Gemini: `GEMINI_API_KEY` is absent or empty; add it to `.env` and restart the backend.
+- `NO_PROVIDER_CONFIGURED` or `OFFLINE`: no configured provider is reachable, so deterministic mode remains active safely.
+- `LLM_PROVIDER=none`: fully offline mode is intentional and all AI providers are disabled.
 
 ### Cloud database note
 
@@ -222,7 +249,7 @@ A 1-page **judge brief** for SIH evaluators is at [`docs/JUDGE-BRIEF.md`](docs/J
 | Deterministic engines | `src/rules` (classification, regimes, ABS, TK/s.3(p), questions) |
 | Retrieval | `src/retrieval/legal-retrieval.service.js` (BM25 ⊕ vector ⊕ authority ⊕ temporal) |
 | Evidence verification | `src/evidence/citation-verifier.js`, `timeline.js` |
-| LLM abstraction | `src/ai` (hybrid cloud-first | cloud | lmstudio | none; structured output w/ safe fallback) |
+| LLM abstraction | `src/ai` (NVIDIA → Gemini → LM Studio → deterministic fallback; structured output with safe fallback) |
 | Indian legal corpus | `scripts/seed-legal-corpus.js` (+ admin ingestion via System page) |
 | Evaluation harness | `src/evaluation` |
 | Frontend | `dashboard/src` (React + Vite: `main.jsx` shell, `sahayak.jsx` workspace, `modules.jsx` pages) |
