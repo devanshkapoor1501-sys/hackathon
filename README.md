@@ -100,7 +100,7 @@ Invoke-RestMethod http://localhost:3000/health/llm
 
 AI is opt-in and the browser never receives provider credentials. The hybrid chain is:
 
-`trained Ollama model → Qwen3-8B → Qwen3-4B → NVIDIA → Gemini → LM Studio → deterministic mode`
+`trained Qwen → NVIDIA → Gemini → Ollama (Qwen3-8B/Qwen3-4B) → deterministic mode`
 
 Enable the backup chain with:
 
@@ -110,7 +110,7 @@ NVIDIA_API_KEY=your-nvidia-key
 GEMINI_API_KEY=your-google-ai-studio-key
 ```
 
-The provider order is `trained Ollama model → Qwen3-8B → Qwen3-4B → NVIDIA → Gemini → LM Studio → deterministic mode`. Qwen3-8B is the default local RAG answer model; Qwen3-4B is used automatically if 8B is unavailable. The trained leg is enabled only when `TRAINED_MODEL_ENABLED=true`, `TRAINED_MODEL` names a loaded model, and `TRAINED_MODEL_MANIFEST` points to a deployment manifest whose `deploymentGate.passed` is `true`. Gemini is attempted only when `GEMINI_API_KEY` is present; the application does not make a Gemini request when the key is empty.
+The provider order is `trained Qwen → NVIDIA → Gemini → Ollama Qwen3-8B → Ollama Qwen3-4B → deterministic mode`. The trained leg is enabled only when `TRAINED_MODEL_ENABLED=true`, `TRAINED_MODEL` names a loaded model, and `TRAINED_MODEL_MANIFEST` points to a deployment manifest whose `deploymentGate.passed` is `true`. Gemini is attempted only when `GEMINI_API_KEY` is present; the application does not make a Gemini request when the key is empty. LM Studio remains available through its explicit `LLM_PROVIDER=lmstudio` mode but is not part of the default chain.
 
 The assistant remains RAG-based: deterministic classification and retrieval select verified, jurisdiction-scoped evidence first, and Qwen only synthesizes from that evidence. Retrieved documents are treated as data, not instructions; the deterministic engines and citation verifier remain authoritative.
 
@@ -217,7 +217,7 @@ Manual demo (~5 min): open the site → choose a role demo account on sign-in (c
 Useful checks:
 - `GET /health/llm` — provider/model/connectivity
 - **System** page — corpus counts, retrieval p50/p95 latency, per-regime/level/freshness breakdown, ingestion panel
-- **Evaluation** page — persistent benchmark suite (31 cases / 11 dimensions) with latency tracking
+- **Evaluation** page — persistent benchmark suite (35 cases / 11 dimensions) with latency tracking
 
 A 1-page **judge brief** for SIH evaluators is at [`docs/JUDGE-BRIEF.md`](docs/JUDGE-BRIEF.md).
 
@@ -269,7 +269,7 @@ A 1-page **judge brief** for SIH evaluators is at [`docs/JUDGE-BRIEF.md`](docs/J
 | Deterministic engines | `src/rules` (classification, regimes, ABS, TK/s.3(p), questions) |
 | Retrieval | `src/retrieval/legal-retrieval.service.js` (BM25 ⊕ vector ⊕ authority ⊕ temporal) |
 | Evidence verification | `src/evidence/citation-verifier.js`, `timeline.js` |
-| LLM abstraction | `src/ai` (trained Ollama → Qwen3-8B → Qwen3-4B → NVIDIA → Gemini → LM Studio → deterministic fallback; structured output with safe fallback) |
+| LLM abstraction | `src/ai` (trained Qwen → NVIDIA → Gemini → Ollama → deterministic fallback; structured output with safe fallback) |
 | Indian legal corpus | `scripts/seed-legal-corpus.js` (+ admin ingestion via System page) |
 | Training pipeline | `training/` and `scripts/prepare-training-data.js` (review-gated Qwen3-8B QLoRA preparation) |
 | Evaluation harness | `src/evaluation` |

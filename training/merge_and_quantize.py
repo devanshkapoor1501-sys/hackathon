@@ -73,6 +73,18 @@ def main():
     evaluation = None
     if args.evaluation:
         evaluation = json.loads(args.evaluation.read_text(encoding="utf-8"))
+    provisional = bool(training_manifest.get("provisional") or training_manifest.get("deploymentBlockedUntilHumanReview"))
+    evaluation_gate = evaluation.get("deploymentGate") if evaluation else None
+    deployment_passed = bool(evaluation_gate and evaluation_gate.get("passed") is True and not provisional)
+    deployment_reason = (
+        "Human review is required before a machine-reviewed adapter can be deployed"
+        if provisional else
+        "Held-out evaluation is required before activation"
+        if not evaluation else
+        "Held-out evaluation passed"
+        if deployment_passed else
+        "Held-out evaluation gate failed"
+    )
     manifest = {
         "baseModel": args.base_model,
         "adapter": str(args.adapter),
@@ -84,7 +96,9 @@ def main():
         "gguf": gguf,
         "quantization": args.quant_type if gguf else None,
         "evaluationResults": evaluation,
-        "deploymentGate": evaluation.get("deploymentGate") if evaluation else "PENDING_EVALUATION",
+        "deploymentGate": {"passed": deployment_passed, "reason": deployment_reason, "evaluation": evaluation_gate},
+        "provisional": provisional,
+        "humanReviewRequired": provisional,
         "deploymentModelId": "ip-sakti-qwen3-8b",
     }
     (args.merged_dir / "deployment-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

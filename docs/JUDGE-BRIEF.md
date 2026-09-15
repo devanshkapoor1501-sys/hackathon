@@ -38,7 +38,7 @@ The LLM is **one component**; the legal conclusions are made by deterministic en
 
 ## What's actually built (today, in this repo)
 
-- **100+4 tests passing** across 20 test files (engines, retrieval, citation verification, prompt-injection safety, multilingual intake, evaluation harness, auth/RBAC, CORS, dashboard smoke)
+- **165 tests passing** across 29 test files (engines, retrieval, citation verification, prompt-injection safety, multilingual intake, evaluation harness, auth/RBAC, CORS, dashboard smoke)
 - **End-to-end flow** the user can walk: Landing → Start Assessment → New Case → Load demo (neem-turmeric) → clarifying questions (option chips) → Run assessment → walk Classification, IP, Regulatory, Evidence, Action plan, Human review, in-case Assistant → **Injection test** button (proves docs can't poison conclusions) → **Export PDF** report
 - **Jurisdiction-tagged corpus** with Indian sources spanning Patents Act §§3(c)–(p), Biological Diversity Act 2002, ASU manufacturing rules, FSSAI Ayurveda Aahara, AFI, ABS guidelines, TKDL policy, plus international TRIPS, CBD/Nagoya, WIPO GRATK, PCT, Madrid, Hague, Budapest and market-access pointers
 - **Works with a local LLM** (LM Studio) or cloud (NVIDIA) — same code path; provider abstraction in `src/ai/`
@@ -91,8 +91,8 @@ The single question every judge should be able to ask the product is: *"Why did 
 
 ## Numbers the judges can ask about
 
-- **100 → 104** tests passing (engines + retrieval + safety + UI smoke)
-- **23** benchmark cases × **11** dimensions in the Evaluation harness
+- **165 tests passing** (engines + retrieval + safety + UI smoke)
+- **35** benchmark cases × **11** dimensions in the Evaluation harness
 - **~6 stages** in the assessment pipeline (animate every one for the demo)
 - **5 support levels** for evidence (Directly Supported → Strong Inference → Interpretation Required → Unsupported → Conflicting)
 - **3+1** confidence outcomes (HIGH / MEDIUM / LOW / REVIEW REQUIRED)

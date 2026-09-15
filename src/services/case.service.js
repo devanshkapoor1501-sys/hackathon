@@ -23,6 +23,37 @@ const FACT_LABELS = {
   traditionalKnowledgeUse: 'traditional-knowledge connection'
 };
 
+function compactAssistantCitations(evidence = []) {
+  const seen = new Set();
+  return evidence
+    .filter(item => item?.verified && item.sourceKey)
+    .map(item => ({
+      sourceKey: item.sourceKey,
+      sourceTitle: item.sourceTitle || item.sourceKey,
+      section: item.section || '',
+      url: item.url || '',
+      status: item.status || '',
+      supportLevel: item.supportLevel || 'UNSUPPORTED',
+      verified: true
+    }))
+    .filter(item => {
+      const key = `${item.sourceKey}|${item.section}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function dedupeEvidence(evidence = []) {
+  const byKey = new Map();
+  for (const item of evidence) {
+    const key = `${item.sourceKey || 'unknown'}|${item.section || ''}|${item.claim || ''}`;
+    const previous = byKey.get(key);
+    if (!previous || (!previous.verified && item.verified)) byKey.set(key, item);
+  }
+  return [...byKey.values()];
+}
+
 export function humanizeFactKey(key) {
   return FACT_LABELS[key] || String(key || '').replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).toLowerCase();
 }
@@ -175,6 +206,59 @@ export class CaseService {
     return { facts, questions, done };
   }
 
+  async buildRetrievedEvidence({ retrieved = [], expectedJurisdiction = 'IN', asOf, claimsHistoricalStatus = false } = {}) {
+    const evidence = [];
+    const sourceCache = new Map();
+    for (const item of retrieved.slice(0, 8)) {
+      if (item.flagged || !item.chunk?.text) continue;
+      const sourceKey = item.sourceKey || item.chunk.sourceKey;
+      if (!sourceKey) continue;
+      let source = sourceCache.get(sourceKey);
+      if (source === undefined) {
+        source = await LegalSource.findOne({ sourceKey }).lean();
+        sourceCache.set(sourceKey, source || null);
+      }
+      if (!source || (source.jurisdiction || 'IN') !== expectedJurisdiction) continue;
+      const chunk = {
+        ...item.chunk,
+        sourceKey,
+        sectionLabel: item.sectionLabel || item.chunk.sectionLabel || '',
+        text: item.text || item.chunk.text,
+        metadata: item.metadata || item.chunk.metadata || {}
+      };
+      const passage = chunk.text.slice(0, 900);
+      const verdict = verifyCitation({
+        claim: passage,
+        chunk,
+        source,
+        asOf,
+        claimsHistoricalStatus,
+        expectedJurisdiction
+      });
+      if (!verdict.verified) continue;
+      evidence.push({
+        claim: `${chunk.sectionLabel ? `[${chunk.sectionLabel}] ` : ''}${passage}`,
+        sourceKey: source.sourceKey,
+        sourceTitle: source.title,
+        authority: source.authority,
+        section: chunk.sectionLabel,
+        url: source.url,
+        status: source.status,
+        effectiveFrom: source.effectiveFrom,
+        sourceVersion: source.version,
+        retrievedAt: new Date().toISOString(),
+        passage,
+        regime: (source.regimes || [])[0] || 'GENERAL',
+        jurisdiction: source.jurisdiction || 'IN',
+        evidenceOrigin: 'RETRIEVAL',
+        untrustedDocumentFlagged: false,
+        ...verdict,
+        verificationNotes: verdict.notes || []
+      });
+    }
+    return evidence;
+  }
+
   /**
    * Case-aware assistant: answers follow-up questions strictly within the
    * current case context (facts + verified evidence). Falls back to a
@@ -182,6 +266,7 @@ export class CaseService {
    */
   async askAssistant(kase, question) {
     const assessment = kase.latestAssessment;
+    const citations = compactAssistantCitations(assessment?.evidence || []);
     const evidenceLines = (assessment?.evidence || []).filter(e => e.verified)
       .map(e => `- ${e.sourceTitle} (${e.authority}, ${e.section || '—'}, status=${e.status}) :: ${e.claim}`).join('\n');
     const caseContext = JSON.stringify({
@@ -218,10 +303,10 @@ Keep the answer under 120 words. "basedOn" lists the source titles used.`,
       answer = llmFallbackSummary(assessment, question);
     }
     kase.assistantMessages.push({ role: 'user', content: String(question).slice(0, 1000) });
-    kase.assistantMessages.push({ role: 'assistant', content: answer.slice(0, 2000) });
+    kase.assistantMessages.push({ role: 'assistant', content: answer.slice(0, 2000), citations });
     if (kase.assistantMessages.length > 60) kase.assistantMessages = kase.assistantMessages.slice(-60);
     await kase.save();
-    return { answer, llmUsed };
+    return { answer, citations, llmUsed };
   }
 
   /**
@@ -231,6 +316,7 @@ Keep the answer under 120 words. "basedOn" lists the source titles used.`,
    */
   async *askAssistantStream(kase, question) {
     const assessment = kase.latestAssessment;
+    const citations = compactAssistantCitations(assessment?.evidence || []);
     const evidenceLines = (assessment?.evidence || []).filter(e => e.verified)
       .map(e => `- ${e.sourceTitle} (${e.authority}, ${e.section || '—'}, status=${e.status}) :: ${e.claim}`).join('\n');
     const caseContext = JSON.stringify({
@@ -271,10 +357,10 @@ Keep the answer under 120 words.`;
       yield { type: 'token', text: fallback };
     }
     kase.assistantMessages.push({ role: 'user', content: String(question).slice(0, 1000) });
-    kase.assistantMessages.push({ role: 'assistant', content: finalAnswer.slice(0, 2000) });
+    kase.assistantMessages.push({ role: 'assistant', content: finalAnswer.slice(0, 2000), citations });
     if (kase.assistantMessages.length > 60) kase.assistantMessages = kase.assistantMessages.slice(-60);
     await kase.save();
-    yield { type: 'done', answer: finalAnswer, llmUsed };
+    yield { type: 'done', answer: finalAnswer, citations, llmUsed };
   }
 
   async answerQuestions(kase, answers) {
@@ -411,14 +497,14 @@ Keep the answer under 120 words.`;
     // 5. Evidence: rules cite seeded sources; each citation is verified against corpus chunks.
     const citations = selectedJurisdiction === INTERNATIONAL_JURISDICTION
       ? this.collectInternationalCitations({ regimes: regimeMap, facts })
-      : this.collectRuleCitations({ classification, regimes: regimeMap, absScreen });
-    const evidence = [];
+      : this.collectRuleCitations({ classification, regimes: regimeMap, absScreen, facts });
+    const ruleEvidence = [];
     for (const citation of citations) {
       const source = await LegalSource.findOne({ sourceKey: citation.sourceKey }).lean();
       const chunks = await LegalChunk.find({ sourceKey: citation.sourceKey }).select('+embedding').lean();
       const chunk = selectBestChunk(citation.claim, chunks);
       if (!source || !chunk) {
-        evidence.push({ ...citation, jurisdiction: selectedJurisdiction, supportLevel: 'UNSUPPORTED', verified: false, verificationNotes: ['Source not present in corpus'] });
+        ruleEvidence.push({ ...citation, jurisdiction: selectedJurisdiction, evidenceOrigin: 'RULE', supportLevel: 'UNSUPPORTED', verified: false, verificationNotes: ['Source not present in corpus'] });
         continue;
       }
       const verdict = verifyCitation({
@@ -427,16 +513,26 @@ Keep the answer under 120 words.`;
         claimsHistoricalStatus: Boolean(historicalQuestionDate) || source.status === 'HISTORICAL',
         expectedJurisdiction: selectedJurisdiction
       });
-      evidence.push({
+      ruleEvidence.push({
         claim: citation.claim, sourceKey: source.sourceKey, sourceTitle: source.title,
         authority: source.authority, section: citation.section, url: source.url,
         status: source.status, effectiveFrom: source.effectiveFrom, sourceVersion: source.version,
         retrievedAt: new Date().toISOString(), passage: chunk.text.slice(0, 900), regime: citation.regime,
         jurisdiction: source.jurisdiction || 'IN',
         untrustedDocumentFlagged: detectInjection(chunk.text),
-        ...verdict
+        evidenceOrigin: 'RULE',
+        ...verdict,
+        verificationNotes: verdict.notes || []
       });
     }
+
+    const retrievedEvidence = await this.buildRetrievedEvidence({
+      retrieved,
+      expectedJurisdiction: selectedJurisdiction,
+      asOf: historicalQuestionDate || asOf,
+      claimsHistoricalStatus: Boolean(historicalQuestionDate) || Boolean(asOf)
+    });
+    const evidence = dedupeEvidence([...ruleEvidence, ...retrievedEvidence]);
 
     // 6. Malicious-document test: flagged docs are surfaced but never change conclusions.
     const flaggedEvidence = retrieved.filter(r => r.flagged).map(r => ({
@@ -444,6 +540,7 @@ Keep the answer under 120 words.`;
       sourceKey: r.chunk.sourceKey || r.sourceKey, section: r.sectionLabel,
       supportLevel: 'CONFLICTING_AUTHORITIES', verified: false,
       jurisdiction: selectedJurisdiction,
+      evidenceOrigin: 'SAFETY',
       verificationNotes: ['Prompt-injection pattern detected in document text'], untrustedDocumentFlagged: true
     }));
 
@@ -530,7 +627,12 @@ VERIFIED EVIDENCE:\n${evidenceBlock || '(none — say that authoritative evidenc
     }
     const compliancePassport = buildCompliancePassport({ facts, classification, documents: kase.dossierDocuments || [] });
     const marketRoutes = buildMarketRoutes({ facts, classification, jurisdictionMode: selectedJurisdiction });
-    const filingPack = buildFilingPack({ facts, classification, regimes: regimeMap.map(r => ({ ...r, label: REGIME_LABELS[r.regime] || INTERNATIONAL_REGIME_LABELS[r.regime] || r.regime })) });
+    const filingPack = buildFilingPack({
+      facts,
+      classification,
+      jurisdictionMode: selectedJurisdiction,
+      regimes: regimeMap.map(r => ({ ...r, label: REGIME_LABELS[r.regime] || INTERNATIONAL_REGIME_LABELS[r.regime] || r.regime }))
+    });
     const safetySummary = buildSafetySummary({ facts, events: kase.safetyEvents || [], jurisdictionMode: selectedJurisdiction });
     const changeAlerts = buildChangeAlerts(evidence);
     const assessment = {

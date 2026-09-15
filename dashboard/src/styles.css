@@ -38,6 +38,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 /* ============ IP-SAKTI SAHAYAK ============ */
 .spin{animation:sahayak-spin .9s linear infinite}
 @keyframes sahayak-spin{to{transform:rotate(360deg)}}
+.assistant-citations{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--muted)}
+.assistant-citations>a,.assistant-citations>span{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;background:#f7f8f8;padding:4px 7px;color:#5d50c9;text-decoration:none;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.assistant-citations>a:hover{background:#f0edff}
 .row-actions{display:flex;gap:10px;align-items:center}
 .row-actions.center{justify-content:center;margin-top:16px}
 .empty-state{text-align:center;padding:56px 24px}

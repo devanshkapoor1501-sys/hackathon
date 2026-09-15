@@ -1,9 +1,13 @@
 {
-  "datasetVersion": "1.0",
-  "status": "PENDING_HUMAN_REVIEW",
-  "examples": 12,
+  "datasetVersion": "2.0",
+  "status": "MACHINE_REVIEWED_PROVISIONAL",
+  "examples": 24,
   "output": "training/review/pending.jsonl",
-  "sourceManifestHash": "a5fdeac3885d38a1a14531b714c8e6580f068d1b90fe14bec8eab34e73329f9e",
+  "machineApprovedInput": "training/review/machine-approved.jsonl",
+  "machineReviewedExamples": 24,
+  "machineReviewFailures": [],
+  "sourceManifestHash": "2ff2bb2a9718491d5039684eca7edc5926fb20efc90198a523e58fb8aa4e0e92",
   "approvedInput": "training/review/approved.jsonl",
-  "generatedAt": "2026-09-15T10:06:29.376Z"
+  "generatedAt": "2026-09-15T18:20:07.072Z",
+  "deploymentBlockedUntilHumanReview": true
 }

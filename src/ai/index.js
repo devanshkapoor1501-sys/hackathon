@@ -150,15 +150,13 @@ export function createProvider(override) {
   return new HybridProvider({
     providers: [
       new OpenAICompatProvider(trainedConfig()),
-      // Qwen3-8B is the default local model. The 4B model is a same-host
-      // fallback for low-memory machines or while 8B is unavailable.
+      // Required production order: trained Qwen -> NVIDIA -> Gemini -> Ollama.
+      new OpenAICompatProvider(cloudConfig()),
+      new OpenAICompatProvider(geminiConfig()),
       new OpenAICompatProvider(ollamaConfig(env.OLLAMA_MODEL, 'ollama-primary')),
       ...(env.OLLAMA_FALLBACK_MODEL && env.OLLAMA_FALLBACK_MODEL !== env.OLLAMA_MODEL
         ? [new OpenAICompatProvider(ollamaConfig(env.OLLAMA_FALLBACK_MODEL, 'ollama-fallback'))]
         : []),
-      new OpenAICompatProvider(cloudConfig()),
-      new OpenAICompatProvider(geminiConfig()),
-      new OpenAICompatProvider(lmstudioConfig()),
       new NoneProvider()
     ]
   });

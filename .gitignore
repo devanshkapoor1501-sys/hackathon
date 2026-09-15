@@ -15,3 +15,6 @@ training/artifacts/*-merged/
 training/artifacts/*.gguf
 training/artifacts/model-comparison.json
 training/review/approved.jsonl
+training/review/machine-approved.jsonl
+training/artifacts/source-download-manifest.json
+training/artifacts/official-sources/

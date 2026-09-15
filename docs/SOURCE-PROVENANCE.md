@@ -60,7 +60,7 @@ International entries are tagged `INTL` and are intentionally kept as separate p
 | `pct_system` / `madrid_system` / `hague_system` / `budapest_treaty` | WIPO filing-system pointers | WIPO | 1–2 | CURRENT | varies | https://www.wipo.int/ |
 | `eu_herbal_products_route` / `us_botanical_products_route` | Export-market access pointers | European Commission / U.S. FDA | 2 | CURRENT | varies | official regulator links in corpus |
 
-Last verified: 2026-08-24.
+Last verified: 2026-09-15.
 
 ## Status semantics
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import React from 'react';
-import { SahayakPage, LegalSourcesPage, EvaluationPage, DevPanelPage, ActionPlan, ClassificationCard, NarrativeCard, RiskList, HumanReviewCard, AssistantPanel, ProductProfileCard, DecisionSnapshot, InternationalMarketPlanner } from './sahayak.jsx';
+import { SahayakPage, LegalSourcesPage, EvaluationPage, DevPanelPage, ActionPlan, ClassificationCard, NarrativeCard, RiskList, HumanReviewCard, AssistantPanel, ProductProfileCard, DecisionSnapshot, InternationalMarketPlanner, ComplianceDashboard, EvidencePanel } from './sahayak.jsx';
 import { DashboardHome, NewCasePage, ClassificationPage, IpAssessmentPage, RegulatoryAssessmentPage, EvidencePage, ActivityPage } from './modules.jsx';
 import { GuidedTour, HelpCenter } from './tour.jsx';
 import { InlineHelp } from './inline-help.jsx';
@@ -75,6 +75,14 @@ describe('frontend screens mount cleanly', () => {
     expect(out).toContain('chev'); // expandable "why" affordance present
     expect(out).toContain('IP-SAKTI Assistant');
     expect(out).toContain('neem');
+  });
+
+  it('uses international labels and citations in the case workspace', () => {
+    const assessment = { jurisdictionMode: 'INTL', regimes: [], evidence: [{ claim: 'International claim', sourceKey: 'pct_system', sourceTitle: 'PCT', jurisdiction: 'INTL', verified: true, supportLevel: 'DIRECTLY_SUPPORTED' }] };
+    const html = renderToString(<><ComplianceDashboard assessment={assessment}/><EvidencePanel evidence={assessment.evidence}/></>);
+    expect(html).toContain('Potentially relevant international routes');
+    expect(html).toContain('International reference corpus');
+    expect(html).not.toContain('Applicable Indian regimes');
   });
 
   it('InlineHelp and HelpCenter render their content', () => {

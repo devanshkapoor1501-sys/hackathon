@@ -3,7 +3,7 @@
 // answer sets or their evidence.
 
 export const INTERNATIONAL_JURISDICTION = 'INTL';
-export const INTERNATIONAL_VERIFIED = '2026-08-24';
+export const INTERNATIONAL_VERIFIED = '2026-09-15';
 
 export const INTERNATIONAL_REGIME_LABELS = {
   TRIPS: 'TRIPS baseline (WTO)',
@@ -185,7 +185,7 @@ export const INTERNATIONAL_CORPUS = [
     sourceKey: 'uae_natural_source_route', title: 'UAE MoHAP natural-source product registration pointer',
     authority: 'UAE Ministry of Health and Prevention', jurisdiction: INTERNATIONAL_JURISDICTION, documentType: 'guidance', regimes: ['EXPORT_MARKET_ACCESS'],
     publicationDate: '2026-08-24', effectiveFrom: '2026-08-24', version: 'official route pointer', status: 'CURRENT',
-    url: 'https://mohap.gov.ae/documents/20117/0/Registration%2Bof%2BA%2BPharmaceutical%2BProduct%2BDerived%2Bfrom%2BNatural%2BSources%2B_%2BMinistry%2Bof%2BHealth%2Band%2BPrevention%2B-%2BUAE.pdf/99e94fbe-6f1d-90e2-e6d1-9eef24d48f87',
+    url: 'https://mohap.gov.ae/documents/d/guest/mohap_services-guide_En',
     sourceLevel: 2, lastVerifiedAt: INTERNATIONAL_VERIFIED, relations: [],
     notes: 'Official pointer only; confirm current classification, registration, licensing and importer requirements before marketing.',
     chunks: [{ sectionLabel: 'Natural-source product registration', text: 'UAE market planning should check whether the product falls within natural-source or pharmaceutical registration pathways, together with current authority, licensing, importer and local-agent requirements. This pointer is not a market-entry conclusion.' }]

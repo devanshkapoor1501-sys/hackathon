@@ -526,7 +526,7 @@ export function AssistantPanel({ api, org, kase, onRefresh }) {
       let response = await fetch(`${base}/api/organizations/${org._id}/sahayak/cases/${kase._id}/ask-stream`, { method: 'POST', credentials: 'include', headers, body: JSON.stringify({ question: q }) });
       if (!response.ok) {
         const fallback = await apiCall(api, `/api/organizations/${org._id}/sahayak/cases/${kase._id}/ask`, { method: 'POST', body: JSON.stringify({ question: q }) });
-        setLog(l => { const copy = [...l]; copy[copy.length - 1] = { role: 'assistant', content: fallback.answer }; return copy; });
+        setLog(l => { const copy = [...l]; copy[copy.length - 1] = { role: 'assistant', content: fallback.answer, citations: fallback.citations || [] }; return copy; });
         return;
       }
       const reader = response.body.getReader();
@@ -549,7 +549,7 @@ export function AssistantPanel({ api, org, kase, onRefresh }) {
               setLog(l => { const copy = [...l]; copy[copy.length - 1] = { role: 'assistant', content: finalText }; return copy; });
             } else if (event.type === 'done') {
               finalText = event.answer || finalText;
-              setLog(l => { const copy = [...l]; copy[copy.length - 1] = { role: 'assistant', content: finalText }; return copy; });
+              setLog(l => { const copy = [...l]; copy[copy.length - 1] = { role: 'assistant', content: finalText, citations: event.citations || [] }; return copy; });
             }
           } catch { /* ignore malformed frame */ }
         }
@@ -560,7 +560,7 @@ export function AssistantPanel({ api, org, kase, onRefresh }) {
     <h3 className="card-h"><Sparkles size={15}/> IP-SAKTI Assistant <small>case-aware · answers only from this case's verified information</small></h3>
     <div className="assistant-log">
       {!log.length && <p className="muted small">Ask follow-up questions about this case — classification, regimes, sources or next actions.</p>}
-      {log.map((m, i) => <div key={i} className={`assistant-msg ${m.role}`}><small>{m.role === 'user' ? 'You' : 'IP-SAKTI Assistant'}</small><p>{m.content || (sending && i === log.length - 1 ? <><span className="thinking-dots"><i/><i/><i/></span> generating…</> : '')}</p></div>)}
+      {log.map((m, i) => <div key={i} className={`assistant-msg ${m.role}`}><small>{m.role === 'user' ? 'You' : 'IP-SAKTI Assistant'}</small><p>{m.content || (sending && i === log.length - 1 ? <><span className="thinking-dots"><i/><i/><i/></span> generating…</> : '')}</p>{m.role === 'assistant' && m.citations?.length > 0 && <div className="assistant-citations"><span>Verified sources</span>{m.citations.map((citation, index) => citation.url ? <a key={`${citation.sourceKey}-${index}`} href={citation.url} target="_blank" rel="noreferrer" title={citation.section || citation.sourceKey}>{citation.sourceTitle || citation.sourceKey}<ExternalLink size={10}/></a> : <span key={`${citation.sourceKey}-${index}`} title={citation.section || citation.sourceKey}>{citation.sourceTitle || citation.sourceKey}</span>)}</div>}</div>)}
     </div>
     <div className="option-row wrap">{suggestions.map(s => <button key={s} type="button" className="chip" onClick={() => ask(s)} disabled={sending}>{s}</button>)}</div>
     <form className="assistant-composer" onSubmit={e => { e.preventDefault(); ask(); }}>
@@ -685,10 +685,11 @@ export function NarrativeCard({ narrative, confidence }) {
 }
 
 export function ComplianceDashboard({ assessment }) {
+  const international = assessment?.jurisdictionMode === 'INTL';
   const regimes = [...(assessment.regimes || [])].sort((a, b) =>
     RELEVANCE_ORDER.indexOf(a.relevance) - RELEVANCE_ORDER.indexOf(b.relevance));
   return <section className="card regimes-card">
-    <h3 className="card-h"><BookOpen size={15}/> Applicable Indian regimes</h3>
+    <h3 className="card-h"><BookOpen size={15}/> {international ? 'Potentially relevant international routes' : 'Applicable Indian regimes'}</h3>
     <div className="regime-grid">
       {regimes.map(r => {
         const sev = r.relevance === 'APPLICABLE' ? 'sev-red-border' : r.relevance === 'POSSIBLY_APPLICABLE' ? 'sev-yellow-border' : r.relevance === 'REVIEW_RECOMMENDED' ? 'sev-yellow-border soft' : 'sev-grey-border';
@@ -837,7 +838,7 @@ export function EvidencePanel({ evidence }) {
           <dl>
             <dt>Authority</dt><dd>{e.authority || '—'} {e.status && `(status: ${e.status}${e.effectiveFrom ? `, effective ${e.effectiveFrom}` : ''})`}</dd>
             <dt>Section</dt><dd>{e.section || '—'}</dd>
-            <dt>Jurisdiction</dt><dd>IN (India only corpus)</dd>
+            <dt>Jurisdiction</dt><dd>{e.jurisdiction === 'INTL' ? 'International reference corpus' : 'India reference corpus'}</dd>
             <dt>Verification notes</dt><dd>{e.verificationNotes?.length ? e.verificationNotes.join('; ') : 'Passed source, jurisdiction, status, date and passage checks.'}</dd>
             {e.url && <><dt>Official URL</dt><dd><a href={e.url} target="_blank" rel="noreferrer">{e.url} <ExternalLink size={11}/></a></dd></>}
             {e.passage && <><dt>Supporting passage</dt><dd><blockquote className="evidence-passage">{e.passage}</blockquote></dd></>}

@@ -14,9 +14,10 @@ export class HybridProvider extends AIProvider {
   }
 
   #preferredProvider() {
-    return this.providers.find(provider => provider.id === this.lastActiveProvider && provider.isConfigured?.())
-      || this.providers.find(provider => provider.isConfigured?.())
-      || null;
+    // Keep the configured order authoritative. A temporary outage in Qwen (or
+    // another earlier provider) must not permanently pin the process to a
+    // fallback after the primary comes back online.
+    return this.providers.find(provider => provider.isConfigured?.()) || null;
   }
 
   #embeddingProvider() {

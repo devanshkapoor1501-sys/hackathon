@@ -32,14 +32,14 @@ def source_manifest_hash(path: Path):
         return sha256(path)
 
 
-def grouped_split(rows, test_fraction=0.2, seed=26045):
+def grouped_split(rows, test_fraction=0.2, seed=26045, minimum_groups=2):
     """Split complete scenario groups so product variants cannot leak."""
     groups = {}
     for row in rows:
         key = row.get("scenario") or row.get("id")
         groups.setdefault(key, []).append(row)
-    if len(groups) < 2:
-        raise ValueError("At least two scenario groups are required for a held-out split")
+    if len(groups) < minimum_groups:
+        raise ValueError(f"At least {minimum_groups} scenario groups are required for a held-out split")
     group_names = list(groups)
     random.Random(seed).shuffle(group_names)
     test_count = max(1, round(len(group_names) * test_fraction))
@@ -49,27 +49,32 @@ def grouped_split(rows, test_fraction=0.2, seed=26045):
     return train_rows, test_rows
 
 
-def load_approved(path: Path):
+def load_training_rows(path: Path, allow_machine_reviewed=False):
     rows = []
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
         row = json.loads(line)
-        if row.get("status") != "APPROVED":
-            raise ValueError(f"{path}:{line_number} is not explicitly APPROVED")
+        status = row.get("status")
+        allowed = {"APPROVED"} | ({"MACHINE_REVIEWED"} if allow_machine_reviewed else set())
+        if status not in allowed:
+            expected = "APPROVED or MACHINE_REVIEWED with --provisional-training" if allow_machine_reviewed else "APPROVED"
+            raise ValueError(f"{path}:{line_number} is not explicitly {expected}")
         if not row.get("messages") or row.get("reviewNotes") is None:
             raise ValueError(f"{path}:{line_number} is missing messages or reviewNotes")
+        if not row.get("sourceRefs"):
+            raise ValueError(f"{path}:{line_number} has no sourceRefs")
         rows.append(row)
     if not rows:
         raise ValueError("No approved training examples were supplied")
     return rows
 
 
-def load_approved_files(paths):
+def load_training_files(paths, allow_machine_reviewed=False):
     rows = []
     seen = set()
     for path in paths:
-        for row in load_approved(path):
+        for row in load_training_rows(path, allow_machine_reviewed=allow_machine_reviewed):
             key = row.get("id") or f"{path}:{len(rows)}"
             if key not in seen:
                 rows.append(row)
@@ -77,15 +82,46 @@ def load_approved_files(paths):
     return rows
 
 
-def validate_source_rights(rows, manifest_path: Path):
+def validate_duplicate_boundaries(rows):
+    fingerprints = {}
+    for row in rows:
+        user_text = "\n".join(
+            str(message.get("content", "")).strip().lower()
+            for message in row.get("messages", [])
+            if message.get("role") != "assistant"
+        )
+        normalized = " ".join(user_text.split())
+        fingerprint = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        scenario = row.get("scenario") or row.get("id")
+        tokens = set(token for token in normalized.split() if len(token) > 2)
+        for previous in fingerprints.values():
+            previous_tokens = previous["tokens"]
+            union = tokens | previous_tokens
+            similarity = len(tokens & previous_tokens) / len(union) if union else 1.0
+            if previous["scenario"] != scenario and len(tokens) >= 6 and len(previous_tokens) >= 6 and similarity >= 0.92:
+                raise ValueError(f"Near-duplicate user prompts cross scenario groups: {previous['id']} and {row.get('id')}")
+        fingerprints[fingerprint] = {"id": row.get("id"), "scenario": scenario, "tokens": tokens}
+
+
+def validate_source_rights(rows, manifest_path: Path, download_manifest_path: Path | None = None):
     if not manifest_path.exists():
         raise FileNotFoundError(f"Source manifest is required for training: {manifest_path}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     eligibility = {source["sourceKey"]: source.get("trainingEligibility") for source in manifest.get("sources", [])}
+    downloaded = {}
+    if download_manifest_path:
+        if not download_manifest_path.exists():
+            raise FileNotFoundError(f"Downloaded-source manifest is required for training: {download_manifest_path}")
+        download_report = json.loads(download_manifest_path.read_text(encoding="utf-8"))
+        downloaded = {result.get("sourceKey"): result for result in download_report.get("results", [])}
     for row in rows:
         for source_key in row.get("sourceRefs", []):
             if eligibility.get(source_key) != "TRAINING_ELIGIBLE":
                 raise ValueError(f"{row.get('id', '<row>')} cites non-training source {source_key!r}")
+            if download_manifest_path:
+                result = downloaded.get(source_key)
+                if not result or result.get("status") != "DOWNLOADED" or not result.get("checksum"):
+                    raise ValueError(f"{row.get('id', '<row>')} cites source without a verified downloaded artifact: {source_key!r}")
 
 
 def main():
@@ -95,11 +131,17 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--feedback-file", type=Path, action="append", default=[], help="Additional approved JSONL exported from human feedback; repeatable")
     parser.add_argument("--source-manifest", type=Path, default=Path("training/artifacts/source-manifest.json"))
+    parser.add_argument("--download-manifest", type=Path, default=None, help="Fetch report; every referenced source must be DOWNLOADED with a checksum")
     parser.add_argument("--epochs", type=float, default=2.0)
+    parser.add_argument("--provisional-training", action="store_true", help="Allow MACHINE_REVIEWED rows for a non-deployable experiment")
+    parser.add_argument("--minimum-scenario-groups", type=int, default=8)
     args = parser.parse_args()
 
-    rows = load_approved_files([args.train_file, *args.feedback_file])
-    validate_source_rights(rows, args.source_manifest)
+    rows = load_training_files([args.train_file, *args.feedback_file], allow_machine_reviewed=args.provisional_training)
+    if any(row.get("status") == "MACHINE_REVIEWED" for row in rows) and not args.provisional_training:
+        raise ValueError("Machine-reviewed rows require --provisional-training and are never deployable by default")
+    validate_duplicate_boundaries(rows)
+    validate_source_rights(rows, args.source_manifest, args.download_manifest)
     # Imports stay inside main so local preparation does not require the GPU
     # training stack merely to inspect or review the generated data.
     import inspect
@@ -110,7 +152,7 @@ def main():
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
 
-    train_rows, test_rows = grouped_split(rows)
+    train_rows, test_rows = grouped_split(rows, minimum_groups=args.minimum_scenario_groups)
     dataset = Dataset.from_list([{"messages": row["messages"], "scenario": row.get("scenario", "unknown")} for row in train_rows])
     evaluation_dataset = Dataset.from_list([{"messages": row["messages"], "scenario": row.get("scenario", "unknown")} for row in test_rows])
     tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=True)
@@ -191,7 +233,11 @@ def main():
         "datasetSha256": sha256(args.train_file),
         "sourceManifest": str(args.source_manifest),
         "sourceManifestSha256": source_manifest_hash(args.source_manifest),
+        "downloadManifest": str(args.download_manifest) if args.download_manifest else None,
         "approvedExamples": len(rows),
+        "reviewStatuses": sorted({row.get("status") for row in rows}),
+        "provisional": any(row.get("status") == "MACHINE_REVIEWED" for row in rows),
+        "deploymentBlockedUntilHumanReview": any(row.get("status") == "MACHINE_REVIEWED" for row in rows),
         "trainExamples": len(train_rows),
         "evaluationExamples": len(test_rows),
         "scenarioGroups": len({row.get("scenario") or row.get("id") for row in rows}),

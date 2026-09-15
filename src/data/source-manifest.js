@@ -140,8 +140,12 @@ export const SUPPLEMENTAL_SOURCE_CATALOG = [
 ];
 
 export function eligibilityForSource(entry) {
-  if (entry.trainingEligibility) return entry.trainingEligibility;
   if (entry.documentType === 'test' || entry.sourceKey.includes('tkdl')) return 'EXCLUDED';
+  if (entry.trainingEligibility === 'EXCLUDED') return 'EXCLUDED';
+  // A catalog pointer is useful for retrieval navigation but is not the
+  // official text itself. Never train on pointer prose or unlicensed text.
+  if (entry.ingestionStatus === 'CATALOG_ONLY') return 'RETRIEVAL_ONLY';
+  if (entry.trainingEligibility) return entry.trainingEligibility;
   return 'TRAINING_ELIGIBLE';
 }
 
@@ -162,13 +166,16 @@ export function buildSourceManifest(corpus = [], { usageContext = 'non-commercia
     status: entry.status || 'CURRENT',
     sourceLevel: entry.sourceLevel,
     lastVerifiedAt: entry.lastVerifiedAt || '',
+    retrievalDate: entry.retrievalDate || entry.lastVerifiedAt || '',
+    checksum: entry.checksum || '',
+    license: entry.license || 'Official source; use subject to the source authority terms',
     trainingEligibility: eligibilityForSource(entry),
     ingestionStatus: entry.ingestionStatus || 'SEEDED_SUMMARY',
     attribution: entry.attribution || entry.authority,
     notes: entry.notes || ''
   }));
   return {
-    manifestVersion: '1.0',
+    manifestVersion: '1.1',
     usageContext,
     patentscopePolicy: 'EXCLUDED_PENDING_EXPLICIT_LICENSE',
     sources
@@ -197,7 +204,7 @@ export function catalogEntryAsPointer(entry) {
     lastVerifiedAt: entry.lastVerifiedAt,
     relations: [],
     notes: entry.notes,
-    trainingEligibility: entry.trainingEligibility,
+    trainingEligibility: eligibilityForSource(entry),
     ingestionStatus: entry.ingestionStatus,
     chunks: [{
       sectionLabel: 'Official source pointer',

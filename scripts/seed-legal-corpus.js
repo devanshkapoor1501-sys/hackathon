@@ -4,13 +4,13 @@ import { getProvider } from '../src/ai/index.js';
 import { detectInjection } from '../src/retrieval/legal-retrieval.service.js';
 import { logger } from '../src/config/logger.js';
 import { INTERNATIONAL_CORPUS } from '../src/rules/international.js';
-import { SUPPLEMENTAL_SOURCE_CATALOG, catalogEntryAsPointer } from '../src/data/source-manifest.js';
+import { SUPPLEMENTAL_SOURCE_CATALOG, catalogEntryAsPointer, eligibilityForSource } from '../src/data/source-manifest.js';
 
 // Authoritative, jurisdiction-tagged corpus. Texts are concise paraphrased summaries
 // for prototype retrieval — every record carries its official URL and lastVerifiedAt;
 // users must consult official texts. India and international records are filtered
 // independently at retrieval and citation-verification time.
-const VERIFIED = '2026-08-24';
+const VERIFIED = '2026-09-15';
 
 export const INDIA_CORPUS = [
   {
@@ -19,7 +19,7 @@ export const INDIA_CORPUS = [
     authority: 'Parliament of India',
     documentType: 'act', regimes: ['PATENT', 'TRADITIONAL_KNOWLEDGE'],
     publicationDate: '1970-09-21', effectiveFrom: '1972-04-20', version: 'post-2005', status: 'CURRENT',
-    url: 'https://www.indiacode.nic.in/handle/123456789/1362', sourceLevel: 1, lastVerifiedAt: VERIFIED,
+    url: 'https://ipindia.gov.in/frontend/pdf/patents/1_113_1_The_Patents_Act__1970___incorporating_all_amendments_till_1-08-2024.pdf', sourceLevel: 1, lastVerifiedAt: VERIFIED,
     relations: [],
     notes: 'Summary of key sections; consult official consolidated text.',
     chunks: [
@@ -37,8 +37,8 @@ export const INDIA_CORPUS = [
     title: 'Patents Act, 1970 — Section 3(d) (pre-2005 wording, as amended 2002)',
     authority: 'Parliament of India',
     documentType: 'act', regimes: ['PATENT'],
-    publicationDate: '2002-06-25', effectiveFrom: '2003-05-20', effectiveTo: '2004-12-31', version: 'pre-2005', status: 'HISTORICAL',
-    url: 'https://www.indiacode.nic.in/handle/123456789/1362', sourceLevel: 1, lastVerifiedAt: VERIFIED,
+    publicationDate: '2002-06-25', effectiveFrom: '2003-05-20', effectiveTo: '2004-12-31', version: 'pre-2005', status: 'HISTORICAL', trainingEligibility: 'RETRIEVAL_ONLY',
+    url: 'https://ipindia.gov.in/frontend/pdf/patents/1_113_1_The_Patents_Act__1970___incorporating_all_amendments_till_1-08-2024.pdf', sourceLevel: 1, lastVerifiedAt: VERIFIED,
     relations: [{ relationType: 'AMENDED_BY', targetKey: 'patents_act_1970_current', note: 'superseded wording replaced by 2005 Amendment' }],
     notes: 'Historical version retained for temporal queries ("what applied before 2005"). Paraphrase; consult official texts for exact wording history.',
     chunks: [
@@ -51,7 +51,7 @@ export const INDIA_CORPUS = [
     authority: 'Parliament of India',
     documentType: 'act', regimes: ['BIODIVERSITY_ABS'],
     publicationDate: '2003-02-05', effectiveFrom: '2004-07-01', version: 'as amended 2023', status: 'CURRENT',
-    url: 'https://www.indiacode.nic.in/handle/123456789/2056', sourceLevel: 1, lastVerifiedAt: VERIFIED,
+    url: 'https://www.moef.gov.in/uploads/2024/07/SL.No.%201%20Biological%20Diversity%20Act%202002.pdf', sourceLevel: 1, lastVerifiedAt: VERIFIED,
     relations: [{ relationType: 'AMENDED_BY', targetKey: 'bda_amendment_2023', note: 'Amendment Act 10 of 2023' }],
     notes: 'Core ABS framework administered by the National Biodiversity Authority and State Biodiversity Boards.',
     chunks: [
@@ -67,7 +67,7 @@ export const INDIA_CORPUS = [
     authority: 'Parliament of India',
     documentType: 'act', regimes: ['BIODIVERSITY_ABS'],
     publicationDate: '2023-08-03', effectiveFrom: '2023-08-03', version: '1', status: 'CURRENT',
-    url: 'https://egazette.gov.in', sourceLevel: 1, lastVerifiedAt: VERIFIED,
+    url: 'https://moef.gov.in/storage/tender/Biological-Diversity-Amendment-Act-2023%20%283%29.pdf', sourceLevel: 1, lastVerifiedAt: VERIFIED,
     relations: [{ relationType: 'AMENDS', targetKey: 'bda_2002', note: 'decriminalisation + registered ABS certificate mechanism' }],
     notes: 'Verify commencement notifications per-section when relying operationally; this record summarises the amendment\u2019s principal changes.',
     chunks: [
@@ -81,7 +81,7 @@ export const INDIA_CORPUS = [
     authority: 'Parliament of India / Ministry of Health & Family Welfare',
     documentType: 'act', regimes: ['AYUSH', 'LABELLING_CLAIMS'],
     publicationDate: '1940', effectiveFrom: '1947-01-01', version: 'as amended', status: 'CURRENT',
-    url: 'https://www.indiacode.nic.in/handle/123456789/2204', sourceLevel: 1, lastVerifiedAt: VERIFIED,
+    url: 'https://www.ayush.gov.in/resources/pdf/quality_standards/Drugs-and-Cosmetics-Act-Rules.pdf', sourceLevel: 1, lastVerifiedAt: VERIFIED,
     relations: [],
     notes: 'Licensing for manufacture/sale of ASU drugs is administered by State Licensing Authorities under the D&C Rules (Part XVI series); confirm current forms/procedures with your State authority.',
     chunks: [
@@ -96,7 +96,7 @@ export const INDIA_CORPUS = [
     authority: 'Parliament of India / FSSAI',
     documentType: 'act', regimes: ['FOOD', 'LABELLING_CLAIMS'],
     publicationDate: '2006-08-23', effectiveFrom: '2011-08-05', version: 'as amended', status: 'CURRENT',
-    url: 'https://www.indiacode.nic.in/handle/123456789/1702', sourceLevel: 1, lastVerifiedAt: VERIFIED,
+    url: 'https://stg-old.fssai.gov.in/cms/food-safety-and-standards-act-2006.php', sourceLevel: 1, lastVerifiedAt: VERIFIED,
     relations: [],
     notes: '',
     chunks: [
@@ -123,7 +123,7 @@ export const INDIA_CORPUS = [
     authority: 'Parliament of India',
     documentType: 'act', regimes: ['TRADEMARK'],
     publicationDate: '1999-12-30', effectiveFrom: '2003-09-15', version: 'as amended', status: 'CURRENT',
-    url: 'https://www.indiacode.nic.in/handle/123456789/1421', sourceLevel: 1, lastVerifiedAt: VERIFIED,
+    url: 'https://ipindia.gov.in/tm-act-1999', sourceLevel: 1, lastVerifiedAt: VERIFIED,
     relations: [],
     notes: '',
     chunks: [
@@ -136,7 +136,7 @@ export const INDIA_CORPUS = [
     authority: 'Parliament of India',
     documentType: 'act', regimes: ['PLANT_VARIETY'],
     publicationDate: '2001-10-30', effectiveFrom: '2005-11-11', version: 'as amended', status: 'CURRENT',
-    url: 'https://plantauthority.gov.in', sourceLevel: 1, lastVerifiedAt: VERIFIED,
+    url: 'https://plantauthority.gov.in', sourceLevel: 1, lastVerifiedAt: VERIFIED, trainingEligibility: 'RETRIEVAL_ONLY',
     relations: [],
     notes: '',
     chunks: [
@@ -162,7 +162,7 @@ export const INDIA_CORPUS = [
     authority: 'Ministry of Consumer Affairs, Food & Public Distribution',
     documentType: 'rules', regimes: ['LABELLING_CLAIMS'],
     publicationDate: '1976/2011', effectiveFrom: '2011-04-01', version: 'as amended', status: 'CURRENT',
-    url: 'https://consumeraffairs.nic.in', sourceLevel: 1, lastVerifiedAt: VERIFIED,
+    url: 'https://consumeraffairs.nic.in', sourceLevel: 1, lastVerifiedAt: VERIFIED, trainingEligibility: 'RETRIEVAL_ONLY',
     relations: [],
     notes: '',
     chunks: [
@@ -188,7 +188,7 @@ export const INDIA_CORPUS = [
     authority: 'National Biodiversity Authority',
     documentType: 'webpage', regimes: ['BIODIVERSITY_ABS'],
     publicationDate: '', effectiveFrom: '', version: 'live page', status: 'UNKNOWN',
-    url: 'https://nbaic.nic.in', sourceLevel: 3, lastVerifiedAt: VERIFIED,
+    url: 'https://nbaic.nic.in', sourceLevel: 3, lastVerifiedAt: VERIFIED, trainingEligibility: 'RETRIEVAL_ONLY',
     relations: [{ relationType: 'REFERENCES', targetKey: 'bda_2002', note: 'statute administered' }],
     notes: 'Live web guidance; verify against current Act/Rules.',
     chunks: [
@@ -213,7 +213,7 @@ export const INDIA_CORPUS = [
     authority: 'Ministry of Environment, Forest and Climate Change, Government of India',
     documentType: 'rules', regimes: ['BIODIVERSITY_ABS'],
     publicationDate: '2024-09-12', effectiveFrom: '2024-10-15', version: '1', status: 'CURRENT',
-    url: 'https://egazette.gov.in', sourceLevel: 1, lastVerifiedAt: VERIFIED,
+    url: 'https://upload.indiacode.nic.in/showfile?actid=AC_CEN_16_18_000010_200318_1517807327125&filename=bd_rules_2024_%281%29.pdf&type=rule', sourceLevel: 1, lastVerifiedAt: VERIFIED, trainingEligibility: 'RETRIEVAL_ONLY',
     relations: [{ relationType: 'GOVERNED_BY', targetKey: 'bda_2002', note: 'subordinate legislation under BDA 2002' }],
     notes: 'Subordinate legislation to the Biological Diversity Act, 2002 (as amended 2023). Specifies ABS certificate timelines, benefit-sharing percentages, deemed-export thresholds, and the procedure for Section 7 prior intimation to State Biodiversity Boards.',
     chunks: [
@@ -260,7 +260,7 @@ export const INDIA_CORPUS = [
     authority: 'Office of the Controller General of Patents, Designs & Trade Marks, Government of India',
     documentType: 'rules', regimes: ['PATENT'],
     publicationDate: '2003-05-02', effectiveFrom: '2003-05-02', version: 'post-2024-amendment', status: 'CURRENT',
-    url: 'https://ipindia.gov.in', sourceLevel: 2, lastVerifiedAt: VERIFIED,
+    url: 'https://ipindia.gov.in/frontend/pdf/patents/1_69_1_The-Patents-Rules-2003-Updated-till-23-June-2017.pdf', sourceLevel: 2, lastVerifiedAt: VERIFIED, trainingEligibility: 'RETRIEVAL_ONLY',
     relations: [{ relationType: 'GOVERNED_BY', targetKey: 'patents_act_1970_current', note: 'subordinate rules under Patents Act 1970' }],
     notes: 'Procedural rules for filing, prosecution, timelines, fees, working statements, and the biological-material disclosure under Section 10 of the Patents Act.',
     chunks: [
@@ -275,7 +275,7 @@ export const INDIA_CORPUS = [
     authority: 'National Biodiversity Authority, Government of India',
     documentType: 'guidance', regimes: ['BIODIVERSITY_ABS', 'TRADITIONAL_KNOWLEDGE'],
     publicationDate: '2024-11-20', effectiveFrom: '2024-11-20', version: '1', status: 'CURRENT',
-    url: 'https://nbaindia.org', sourceLevel: 3, lastVerifiedAt: VERIFIED,
+    url: 'https://nbaindia.org', sourceLevel: 3, lastVerifiedAt: VERIFIED, trainingEligibility: 'RETRIEVAL_ONLY',
     relations: [{ relationType: 'SUPPLEMENTS', targetKey: 'bda_2002', note: 'operational guidance for ABS certificate under amended BDA' }],
     notes: 'Operational guidance on how the State Biodiversity Boards issue ABS certificates for eligible categories (including cultivated medicinal plants and Indian companies commercialising biological resources from India), and how benefit-sharing terms are recorded on the certificate.',
     chunks: [
@@ -291,7 +291,7 @@ export const INDIA_CORPUS = [
     authority: 'Ministry of Health & Family Welfare, Government of India',
     documentType: 'rules', regimes: ['AYUSH', 'LABELLING_CLAIMS'],
     publicationDate: '1970-04-01', effectiveFrom: '1970-04-01', version: 'as amended', status: 'CURRENT',
-    url: 'https://www.indiacode.nic.in', sourceLevel: 1, lastVerifiedAt: VERIFIED,
+    url: 'https://www.indiacode.nic.in', sourceLevel: 1, lastVerifiedAt: VERIFIED, trainingEligibility: 'RETRIEVAL_ONLY',
     relations: [{ relationType: 'GOVERNED_BY', targetKey: 'drugs_cosmetics_act_asu', note: 'subordinate rules under D&C Act 1940' }],
     notes: 'Premises and GMP-style requirements for ASU manufacturing. Together with the D&C Act 1940 forms the core ASU drug manufacturing licensing framework.',
     chunks: [
@@ -307,7 +307,7 @@ export const INDIA_CORPUS = [
     authority: 'Office of the Controller General of Patents, Designs & Trade Marks, Government of India',
     documentType: 'rules', regimes: ['TRADEMARK'],
     publicationDate: '2017-03-06', effectiveFrom: '2017-03-06', version: 'as amended', status: 'CURRENT',
-    url: 'https://ipindia.gov.in', sourceLevel: 2, lastVerifiedAt: VERIFIED,
+    url: 'https://ipindia.gov.in/frontend/pdf/trade-mark/act/1_69_1_Trade_Marks_Rules_2017.pdf', sourceLevel: 2, lastVerifiedAt: VERIFIED,
     relations: [{ relationType: 'GOVERNED_BY', targetKey: 'trademarks_act_1999', note: 'subordinate rules under Trade Marks Act 1999' }],
     notes: 'Procedural rules for trademark filing, examination, opposition, renewal, rectification and transmission. The 2017 Rules replaced the 2002 Rules and introduced several digital-first procedures.',
     chunks: [
@@ -323,7 +323,7 @@ export const INDIA_CORPUS = [
     authority: 'Office of the Registrar, Protection of Plant Varieties & Farmers\' Rights Authority, Government of India',
     documentType: 'rules', regimes: ['PLANT_VARIETY'],
     publicationDate: '2003-09-12', effectiveFrom: '2003-09-12', version: 'as amended', status: 'CURRENT',
-    url: 'https://plantauthority.gov.in', sourceLevel: 2, lastVerifiedAt: VERIFIED,
+    url: 'https://plantauthority.gov.in', sourceLevel: 2, lastVerifiedAt: VERIFIED, trainingEligibility: 'RETRIEVAL_ONLY',
     relations: [{ relationType: 'GOVERNED_BY', targetKey: 'ppvfr_2001', note: 'subordinate rules under PPVFR Act 2001' }],
     notes: 'Procedural rules for the registration of plant varieties, including the categories (new variety, extant variety, farmers\' variety, essentially derived variety) and the Distinctness, Uniformity and Stability (DUS) testing requirements.',
     chunks: [
@@ -393,7 +393,8 @@ async function main({ wipe = true } = {}) {
     if (!wipe && exists) continue;
     await LegalSource.deleteOne({ sourceKey: entry.sourceKey });
     await LegalChunk.deleteMany({ sourceKey: entry.sourceKey });
-    await LegalSource.create({ ...sourceFields, trainingEligibility: entry.trainingEligibility || (entry.documentType === 'test' ? 'EXCLUDED' : 'TRAINING_ELIGIBLE'), ingestionStatus: entry.ingestionStatus || 'SEEDED_SUMMARY' });
+    const trainingEligibility = eligibilityForSource(entry);
+    await LegalSource.create({ ...sourceFields, trainingEligibility, ingestionStatus: entry.ingestionStatus || 'SEEDED_SUMMARY' });
     const embeddings = await embedChunks(provider, chunks);
     await LegalChunk.insertMany(chunks.map((chunk, index) => ({
       sourceKey: entry.sourceKey, text: chunk.text, sectionLabel: chunk.sectionLabel || '',
@@ -403,7 +404,7 @@ async function main({ wipe = true } = {}) {
         status: entry.status, effectiveFrom: entry.effectiveFrom || null, effectiveTo: entry.effectiveTo || null,
         version: entry.version, regimes: entry.regimes, jurisdiction: entry.jurisdiction || 'IN',
         containsInstructionPatterns: detectInjection(chunk.text),
-        trainingEligibility: entry.trainingEligibility || (entry.documentType === 'test' ? 'EXCLUDED' : 'TRAINING_ELIGIBLE'),
+        trainingEligibility,
         ingestionStatus: entry.ingestionStatus || 'SEEDED_SUMMARY'
       }
     })));

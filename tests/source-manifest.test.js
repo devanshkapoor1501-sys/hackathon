@@ -19,6 +19,7 @@ describe('source provenance and rights manifest', () => {
   it('keeps PATENTSCOPE excluded and TKDL restricted', () => {
     expect(manifest.sources.find(source => source.sourceKey === 'wipo_patentscope_bibliographic_excluded')).toMatchObject({ trainingEligibility: 'EXCLUDED' });
     expect(manifest.sources.find(source => source.sourceKey === 'tkdl_pointer')).toMatchObject({ trainingEligibility: 'EXCLUDED' });
+    expect(manifest.sources.filter(source => source.ingestionStatus === 'CATALOG_ONLY').every(source => source.trainingEligibility !== 'TRAINING_ELIGIBLE')).toBe(true);
   });
 
   it('catalogues the requested WIPO treaty and system families', () => {

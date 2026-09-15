@@ -83,7 +83,25 @@ const evidenceClaimSchema = new Schema({
   verificationNotes: [String],
   regime: String,
   jurisdiction: { type: String, enum: ['IN', 'INTL'] },
-  untrustedDocumentFlagged: Boolean
+  untrustedDocumentFlagged: Boolean,
+  evidenceOrigin: { type: String, enum: ['RULE', 'RETRIEVAL', 'SAFETY'] }
+}, { _id: false });
+
+const assistantCitationSchema = new Schema({
+  sourceKey: { type: String, required: true },
+  sourceTitle: String,
+  section: String,
+  url: String,
+  status: String,
+  supportLevel: String,
+  verified: Boolean
+}, { _id: false });
+
+const assistantMessageSchema = new Schema({
+  role: { type: String, enum: ['user', 'assistant'] },
+  content: String,
+  citations: { type: [assistantCitationSchema], default: [] },
+  at: { type: Date, default: Date.now }
 }, { _id: false });
 
 const actionItemSchema = new Schema({
@@ -178,7 +196,7 @@ const caseSchema = new Schema({
   facts: { type: factSheetSchema, default: () => ({}) },
   language: { type: String, enum: ['en', 'hi'], default: 'en' },
   questions: [questionSchema],
-  assistantMessages: [{ role: { type: String, enum: ['user', 'assistant'] }, content: String, at: { type: Date, default: Date.now } }],
+  assistantMessages: [assistantMessageSchema],
   classification: classificationSchema,
   assessments: [assessmentSchema],
   latestAssessment: assessmentSchema,
