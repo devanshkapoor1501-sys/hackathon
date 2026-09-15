@@ -3,7 +3,8 @@ import { z } from 'zod';
 export const FACT_FIELDS = [
   'intendedUse', 'claims', 'dosageForm', 'routeOfAdministration', 'ingredients', 'formulationName',
   'manufacturingMethod', 'manufacturingLocation', 'classicalSource', 'newProcess', 'processDescription',
-  'biologicalOriginIndia', 'wildCollected', 'traditionalKnowledgeUse', 'commercialIntent', 'targetMarket', 'userType'
+  'biologicalOriginIndia', 'wildCollected', 'traditionalKnowledgeUse', 'commercialIntent', 'targetMarket',
+  'targetMarkets', 'targetMarketOther', 'userType'
 ];
 
 export const factSheetSchema = z.object({
@@ -27,6 +28,8 @@ export const factSheetSchema = z.object({
   traditionalKnowledgeUse: z.enum(['direct_traditional_use', 'modified_traditional', 'fully_novel', 'unknown']).default('unknown'),
   commercialIntent: z.enum(['yes_commercial_sale_india', 'research_only', 'personal_use', 'export_related', 'unknown']).default('unknown'),
   targetMarket: z.enum(['india_only', 'india_and_export', 'unknown']).default('unknown'),
+  targetMarkets: z.array(z.enum(['EU', 'US', 'UAE', 'OTHER'])).max(4).default([]),
+  targetMarketOther: z.string().max(120).default(''),
   userType: z.enum(['startup_msme', 'practitioner', 'researcher_student', 'manufacturer', 'farmer_grower', 'other', 'unknown']).default('unknown'),
   labelText: z.string().max(5000).default('')
 });

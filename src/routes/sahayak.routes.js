@@ -109,6 +109,13 @@ export async function sahayakRoutes(app) {
     };
   });
 
+  // Optional on-demand explanation. The service owns the provider fallback and
+  // always persists the latest safe summary alongside the current assessment.
+  app.post('/api/organizations/:organizationId/sahayak/cases/:id/summary', { preHandler: [authorizeOrganization()] }, async request => {
+    const kase = await caseService.getCase(request.organizationId, request.params.id);
+    return caseService.generatePlainLanguageSummary(kase);
+  });
+
   // ---- Compliance passport, claim intelligence and review workflow ----
   app.post('/api/organizations/:organizationId/sahayak/cases/:id/claims/check', { preHandler: [authorizeOrganization()] }, async request => {
     const kase = await caseService.getCase(request.organizationId, request.params.id);

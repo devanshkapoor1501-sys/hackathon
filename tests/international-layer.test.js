@@ -28,5 +28,14 @@ describe('international jurisdiction layer', () => {
     expect(india.verified).toBe(false);
     expect(india.notes.join(' ')).toMatch(/jurisdiction mismatch/i);
   });
+
+  it('creates selected EU, US, UAE and custom market pointers without Indian regimes', () => {
+    const facts = { commercialIntent: 'export_related', targetMarkets: ['EU', 'US', 'UAE', 'OTHER'], targetMarketOther: 'Singapore' };
+    const regimes = mapInternationalRegimes({ primary: 'PROPRIETARY_ASU_MEDICINE' }, facts);
+    const exportRoute = regimes.find(item => item.regime === 'EXPORT_MARKET_ACCESS');
+    expect(exportRoute.evidenceKeys).toEqual(expect.arrayContaining(['eu_herbal_products_route', 'us_botanical_products_route', 'uae_natural_source_route', 'custom_market_route']));
+    expect(INTERNATIONAL_CORPUS.find(item => item.sourceKey === 'uae_natural_source_route').url).toMatch(/mohap\.gov\.ae/);
+    expect(regimes.map(item => item.regime)).not.toEqual(expect.arrayContaining(['AYUSH', 'PATENT', 'BIODIVERSITY_ABS']));
+  });
 });
 

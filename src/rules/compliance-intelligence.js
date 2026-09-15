@@ -90,10 +90,21 @@ export function buildCompliancePassport({ facts = {}, classification = {}, docum
 
 export function buildMarketRoutes({ facts = {}, classification = {}, jurisdictionMode = 'IN' } = {}) {
   if (jurisdictionMode === 'INTL') {
-    const routes = [{ id: 'WIPO', name: 'WIPO systems', status: 'IP_ROUTE', authority: 'World Intellectual Property Organization', officialUrl: 'https://www.wipo.int/', steps: ['Choose the right PCT, Madrid, Hague or Budapest route', 'Confirm applicant eligibility and designated jurisdictions', 'Do not treat a system filing as a worldwide grant'] }];
-    if (facts.commercialIntent === 'export_related' || facts.targetMarket === 'india_and_export') {
-      routes.push({ id: 'EU', name: 'European Union', status: 'MARKET_POINTER', authority: 'European Commission', officialUrl: 'https://health.ec.europa.eu/medicinal-products/herbal-medicinal-products_en', steps: ['Decide food, cosmetic or medicinal route', 'Check traditional-use evidence and labelling', 'Confirm Member State requirements'] });
-      routes.push({ id: 'US', name: 'United States', status: 'MARKET_POINTER', authority: 'U.S. Food and Drug Administration', officialUrl: 'https://www.fda.gov/drugs/guidance-compliance-regulatory-information/guidances-drugs', steps: ['Classify dietary supplement vs botanical drug route', 'Review claims, ingredient status and manufacturing controls', 'Confirm current FDA requirements before marketing'] });
+    const routes = [{ id: 'WIPO', name: 'WIPO systems', status: 'IP_ROUTE', authority: 'World Intellectual Property Organization', officialUrl: 'https://www.wipo.int/', steps: ['Choose the right PCT, Madrid, Hague or Budapest route', 'Confirm applicant eligibility and designated jurisdictions', 'Do not treat a system filing as a worldwide grant'], checklist: true }];
+    const selected = [...new Set(Array.isArray(facts.targetMarkets) ? facts.targetMarkets : [])];
+    if (!selected.length && (facts.commercialIntent === 'export_related' || facts.targetMarket === 'india_and_export')) {
+      selected.push('EU', 'US');
+    }
+    if (!selected.length) routes.push({ id: 'TARGET_MARKETS', name: 'Target-market selection', status: 'MARKET_SELECTION_REQUIRED', authority: 'Target-country regulator', officialUrl: '', steps: ['Select one or more target markets', 'Use the resulting checklist to plan classification, claims, labelling and evidence review'], checklist: true });
+    const marketPointers = {
+      EU: { name: 'European Union', authority: 'European Commission', officialUrl: 'https://health.ec.europa.eu/medicinal-products/herbal-medicinal-products_en', steps: ['Decide medicinal, food-supplement or cosmetic route', 'Review claims, labelling, quality and safety evidence', 'Confirm Member State requirements before marketing'] },
+      US: { name: 'United States', authority: 'U.S. Food and Drug Administration', officialUrl: 'https://www.fda.gov/about-fda/center-drug-evaluation-and-research-cder/what-botanical-drug', steps: ['Distinguish dietary supplement, botanical-drug, food or cosmetic treatment', 'Review claims, ingredient status, manufacturing and labelling', 'Check adverse-event and current FDA obligations'] },
+      UAE: { name: 'United Arab Emirates', authority: 'UAE Ministry of Health and Prevention', officialUrl: 'https://mohap.gov.ae/documents/20117/0/Registration%2Bof%2BA%2BPharmaceutical%2BProduct%2BDerived%2Bfrom%2BNatural%2BSources%2B_%2BMinistry%2Bof%2BHealth%2Band%2BPrevention%2B-%2BUAE.pdf/99e94fbe-6f1d-90e2-e6d1-9eef24d48f87', steps: ['Flag product classification and registration review', 'Check natural-source or pharmaceutical registration and current authority requirements', 'Confirm local licensing, importer and local-agent requirements'] },
+      OTHER: { name: facts.targetMarketOther || 'Custom country', authority: 'Target-country regulator', officialUrl: '', steps: ['Identify the competent regulator and product category', 'Verify claims, ingredients, quality, safety, labelling and import obligations', 'Confirm current local law with qualified counsel or the regulator'], custom: true }
+    };
+    for (const market of selected) {
+      const pointer = marketPointers[market] || marketPointers.OTHER;
+      routes.push({ id: market, status: 'MARKET_CHECKLIST', ...pointer, disclaimer: pointer.custom ? 'Generic verification checklist only. No country-specific law has been inferred.' : 'Checklist only; this does not approve market entry or replace target-country law.', checklist: true });
     }
     return routes;
   }

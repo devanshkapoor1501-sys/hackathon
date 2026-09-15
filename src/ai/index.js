@@ -53,6 +53,7 @@ export function createProvider(override) {
   return new HybridProvider({
     providers: [
       new OpenAICompatProvider(cloudConfig()),
+      new OpenAICompatProvider(geminiConfig()),
       new OpenAICompatProvider(lmstudioConfig()),
       new NoneProvider()
     ]

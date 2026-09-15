@@ -29,7 +29,8 @@ export const CLASSIFICATIONS = [
 export const FACT_FIELDS = [
   'intendedUse', 'claims', 'dosageForm', 'routeOfAdministration', 'ingredients', 'formulationName',
   'manufacturingMethod', 'manufacturingLocation', 'classicalSource', 'newProcess', 'processDescription',
-  'biologicalOriginIndia', 'wildCollected', 'traditionalKnowledgeUse', 'commercialIntent', 'targetMarket', 'userType', 'labelText'
+  'biologicalOriginIndia', 'wildCollected', 'traditionalKnowledgeUse', 'commercialIntent', 'targetMarket',
+  'targetMarkets', 'targetMarketOther', 'userType', 'labelText'
 ];
 
 const factSheetSchema = {
@@ -49,6 +50,8 @@ const factSheetSchema = {
   traditionalKnowledgeUse: { type: String, enum: ['direct_traditional_use', 'modified_traditional', 'fully_novel', 'unknown'], default: 'unknown' },
   commercialIntent: { type: String, enum: ['yes_commercial_sale_india', 'research_only', 'personal_use', 'export_related', 'unknown'], default: 'unknown' },
   targetMarket: { type: String, enum: ['india_only', 'india_and_export', 'unknown'], default: 'unknown' },
+  targetMarkets: { type: [String], enum: ['EU', 'US', 'UAE', 'OTHER'], default: [] },
+  targetMarketOther: { type: String, maxlength: 120, default: '' },
   userType: { type: String, enum: ['startup_msme', 'practitioner', 'researcher_student', 'manufacturer', 'farmer_grower', 'other', 'unknown'], default: 'unknown' },
   labelText: { type: String, default: '' }
 };
@@ -127,6 +130,16 @@ const assessmentSchema = new Schema({
   narrative: {
     assessment: String,
     meaning: String
+  },
+  userSummary: {
+    overview: String,
+    keyPoints: [String],
+    nextSteps: [String],
+    caveat: String,
+    language: { type: String, enum: ['en', 'hi'] },
+    mode: { type: String, enum: ['AI', 'DETERMINISTIC'] },
+    provider: String,
+    generatedAt: Date
   },
   classification: classificationSchema,
   regimes: [regimeAssessmentSchema],

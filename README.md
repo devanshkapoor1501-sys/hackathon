@@ -9,73 +9,116 @@ Jurisdiction-aware prototype built for Smart India Hackathon Problem Statement *
 
 ---
 
-## Quick start
+## Run locally
 
-Prerequisites: Node.js 22 or newer and MongoDB. Docker Desktop is the easiest way to run the required local MongoDB replica set. Gemini, NVIDIA and LM Studio are supported through the backend provider abstraction.
+### Prerequisites
 
-```bash
-npm install
-npm --prefix dashboard install
+- Node.js 22 or newer and npm.
+- Docker Desktop with Docker Compose, or a MongoDB replica-set connection. The local Compose file is the easiest option.
+- Git.
+- AI credentials are optional. The application works in deterministic/offline mode when no provider is configured.
 
-# 1. Configure the backend
-# Windows PowerShell:
-Copy-Item .env.example .env
-# macOS/Linux:
-# cp .env.example .env
-# The copied defaults use hybrid mode with no AI credentials, so the app
-# starts in deterministic mode until you configure a provider.
+### 1. Clone and install dependencies
 
-# 2. Start the required local MongoDB (skip this if using MongoDB Atlas)
-docker compose up -d
-
-# 3. Seed the Indian legal corpus once
-npm run seed:legal
-
-# 4. Run the backend in one terminal
-npm run dev                   # http://localhost:3000
-
-# 5. Run the dashboard in a second terminal
-npm run dashboard:dev         # http://localhost:5173
+```powershell
+git clone https://github.com/Tarundeep1357/IP-Sakati-Sahayak.git
+cd IP-Sakati-Sahayak
+npm ci
+npm --prefix dashboard ci
 ```
 
-For MongoDB Atlas, omit `docker compose up -d`, set `MONGODB_URI` in `.env`, and make sure your client IP is allowed in MongoDB Cloud → Network Access. MongoDB is required for stored cases and the legal corpus; AI providers are optional.
+If you already have this repository, update it instead:
+
+```powershell
+git pull
+npm ci
+npm --prefix dashboard ci
+```
+
+### 2. Configure the backend
+
+Create a local environment file:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+For a local deterministic run, use these values in `.env`:
+
+```dotenv
+NODE_ENV=development
+MONGODB_URI=mongodb://localhost:27017/ip_sakti_sahayak?directConnection=true
+LLM_PROVIDER=none
+```
+
+Keep secrets only in `.env`; never commit that file. For a production deployment, replace the placeholder JWT, cookie, and encryption secrets with fresh values.
+
+### 3. Start MongoDB
+
+In the repository root:
+
+```powershell
+docker compose up -d
+```
+
+The Compose setup starts MongoDB and initializes its replica set. If MongoDB is already running locally, skip this command and point `MONGODB_URI` at the existing instance. MongoDB Atlas can also be used by replacing `MONGODB_URI` with the Atlas connection string.
+
+Seed the jurisdiction-tagged legal corpus once after MongoDB is available:
+
+```powershell
+npm run seed:legal
+```
+
+### 4. Start the application
+
+Use two terminals from the repository root.
+
+Terminal 1 — backend API:
+
+```powershell
+npm run dev
+```
+
+Terminal 2 — React/Vite dashboard:
+
+```powershell
+npm run dashboard:dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). The API runs at [http://localhost:3000](http://localhost:3000).
+
+Useful health checks:
+
+```powershell
+Invoke-WebRequest http://localhost:3000/ready
+Invoke-RestMethod http://localhost:3000/health/llm
+```
 
 ### Optional AI providers
 
-The browser never receives an AI key. With the default `LLM_PROVIDER=hybrid`, the app tries NVIDIA cloud AI, then LM Studio, and finally deterministic mode. For the configured Gemini setup, `LLM_PROVIDER=gemini` uses `gemini-3.6-flash` directly. Classification, regime mapping, citation verification, action plans and PDF reports remain available if any AI provider is unavailable.
+AI is opt-in and the browser never receives provider credentials. The hybrid chain is:
 
-To use Gemini as the active model, set the following in `.env` and restart the backend:
+`NVIDIA → Gemini → LM Studio → deterministic mode`
 
-```
-LLM_PROVIDER=gemini
-GEMINI_API_KEY=your-google-ai-studio-key
-GEMINI_CHAT_MODEL=gemini-3.6-flash
-GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
-GEMINI_REASONING_EFFORT=low
-```
+Enable it with:
 
-Google documents this OpenAI-compatible endpoint and the `gemini-3.6-flash` model ID in its [Gemini API documentation](https://ai.google.dev/gemini-api/docs/openai).
-
-To enable the cloud leg, set the following in `.env` and restart the backend:
-
-```
+```dotenv
 LLM_PROVIDER=hybrid
-NVIDIA_API_KEY=nvapi-your-key
+NVIDIA_API_KEY=your-nvidia-key
+GEMINI_API_KEY=your-google-ai-studio-key
 ```
 
-To use LM Studio as the optional local fallback:
+Gemini is attempted only when `GEMINI_API_KEY` is present. To use Gemini directly, set `LLM_PROVIDER=gemini`. To stay fully offline, use `LLM_PROVIDER=none`.
 
-1. Load a chat model (e.g., `google/gemma-4-e2b`) → Developer tab → **Start Server** (port 1234).
-2. In `.env`:
-   ```
-   LLM_PROVIDER=lmstudio
-   LMSTUDIO_BASE_URL=http://localhost:1234/v1
-   LMSTUDIO_MODEL=google/gemma-4-e2b
-   EMBEDDING_MODEL=            # empty → lexical retrieval only (fully functional)
-   ```
-3. Verify: `curl http://localhost:3000/health/llm` and inspect `activeProvider` and `providerAttempts`.
+For LM Studio, start its local OpenAI-compatible server and set:
 
-The explicit modes are also preserved: `LLM_PROVIDER=cloud` uses only NVIDIA, `LLM_PROVIDER=lmstudio` uses only LM Studio, and `LLM_PROVIDER=none` disables AI completely. The browser never talks directly to either AI endpoint; requests always go through this backend.
+```dotenv
+LLM_PROVIDER=lmstudio
+LMSTUDIO_BASE_URL=http://localhost:1234/v1
+LMSTUDIO_MODEL=your-local-chat-model
+```
+
+After changing `.env`, restart the backend and inspect `/health/llm` for `providerAttempts`, `activeProvider`, and the current offline/fallback status.
 
 ### Cloud database note
 
@@ -100,14 +143,27 @@ The **IP-SAKTI Assistant** (in-case chat) answers follow-up questions strictly f
 
 ---
 
-## Testing
+## Assessment and reporting features
 
-```bash
-npm test                              # backend/engine tests (no servers needed)
+- **Decision snapshot:** plain-language classification, confidence meaning, evidence completeness, missing facts, and the conditions that could change the result.
+- **Start here:** prioritized next steps with action-oriented wording and human-review boundaries.
+- **Plain-language summary:** optional English or Hindi summary generated on demand, with safe deterministic fallback and copy-to-clipboard support.
+- **Decision brief PDF:** branded cover, executive decision, facts, implications, next steps, risks, unresolved information, international plan, evidence appendix, page numbers, and non-legal-advice disclaimer.
+- **International target-market planner:** EU, United States, UAE, and custom-country checklist routes. These are verification checklists, not market-entry approval conclusions.
+- **Provider fallback status:** the UI and `/health/llm` show whether the active result came from the configured provider, a fallback provider, or deterministic mode.
 
-cd dashboard && npx vitest run src/smoke.test.jsx   # UI render smoke tests
-npm run dashboard:build                # production dashboard build
+International routes link to official starting points, including [European Commission herbal medicinal products](https://health.ec.europa.eu/medicinal-products/herbal-medicinal-products_en), [FDA botanical products](https://www.fda.gov/about-fda/center-drug-evaluation-and-research-cder/what-botanical-drug), and [UAE MoHAP natural-source product registration](https://mohap.gov.ae/documents/20117/0/Registration%2Bof%2BA%2BPharmaceutical%2BProduct%2BDerived%2Bfrom%2BNatural%2BSources%2B_%2BMinistry%2Bof%2BHealth%2Band%2BPrevention%2B-%2BUAE.pdf/99e94fbe-6f1d-90e2-e6d1-9eef24d48f87).
+
+## Testing and production build
+
+Run the full test suite serially on Windows if your machine has limited memory:
+
+```powershell
+npm test -- --run --maxWorkers=1
+npm run dashboard:build
 ```
+
+The test suite includes backend, deterministic assessment, AI fallback, summary, international planner, PDF, and dashboard smoke coverage. The production dashboard bundle is generated under `dashboard/dist`.
 
 Manual demo (~5 min): open the site → choose a role demo account on sign-in (credentials: [`docs/DEMO-ACCOUNTS.md`](docs/DEMO-ACCOUNTS.md)) → role-specific dashboard → open the seeded case queue → inspect Classification → IP → Regulatory → Evidence → Action plan → Human review. Applicant accounts can also create a new case and use **Load demo case** (neem-turmeric scenario).
 

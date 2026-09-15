@@ -64,6 +64,18 @@ describe('AI provider fallback chain', () => {
     expect(parts).toEqual(['lmstudio']);
   });
 
+  it('uses the opt-in Gemini leg before LM Studio when NVIDIA is unavailable', async () => {
+    const nvidia = new FakeProvider('nvidia', { configured: false });
+    const gemini = new FakeProvider('gemini');
+    const local = new FakeProvider('lmstudio');
+    const provider = new HybridProvider({ providers: [nvidia, gemini, local, new NoneProvider()] });
+
+    await expect(provider.generateStructured({})).resolves.toEqual({ data: { provider: 'gemini' } });
+    const health = await provider.healthCheck();
+    expect(health.activeProvider).toBe('gemini');
+    expect(health.attempts.map(item => item.provider)).toEqual(['nvidia', 'gemini']);
+  });
+
   it('falls back to the caller-safe error when no AI provider is available', async () => {
     const provider = new HybridProvider({ providers: [
       new FakeProvider('nvidia', { configured: false }),

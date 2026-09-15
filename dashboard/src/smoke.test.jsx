@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import React from 'react';
-import { SahayakPage, LegalSourcesPage, EvaluationPage, DevPanelPage, ActionPlan, ClassificationCard, NarrativeCard, RiskList, HumanReviewCard, AssistantPanel, ProductProfileCard } from './sahayak.jsx';
+import { SahayakPage, LegalSourcesPage, EvaluationPage, DevPanelPage, ActionPlan, ClassificationCard, NarrativeCard, RiskList, HumanReviewCard, AssistantPanel, ProductProfileCard, DecisionSnapshot, InternationalMarketPlanner } from './sahayak.jsx';
 import { DashboardHome, NewCasePage, ClassificationPage, IpAssessmentPage, RegulatoryAssessmentPage, EvidencePage, ActivityPage } from './modules.jsx';
 import { GuidedTour, HelpCenter } from './tour.jsx';
 import { InlineHelp } from './inline-help.jsx';
@@ -48,6 +48,8 @@ describe('frontend screens mount cleanly', () => {
   renders('InlineLlmBanner offline', <InlineLlmBanner phase="offline" info={{}}/>);
   renders('InlineLlmBanner warn', <InlineLlmBanner phase="warn" info={{ reason: 'no model loaded' }}/>);
   renders('EmptyRecovery', <EmptyRecovery title="Nothing here" description="Create a case" primary="New case" onPrimary={()=>{}} secondary="Take tour" onSecondary={()=>{}}/>);
+  renders('DecisionSnapshot', <DecisionSnapshot assessment={{ confidence: 'MEDIUM', classification: { primary: 'PROPRIETARY_ASU_MEDICINE', labelLocalized: 'Proprietary ASU medicine', factsUsed: ['claims'], missingInformation: ['newProcess'] }, narrative: { assessment: 'Appears to be a proprietary medicine candidate.', meaning: 'Review the evidence.' }, actions: [{ title: 'Confirm the route', priority: 'HIGH', why: 'It matters.' }], unknowns: ['Confirm the process'] }} onGenerateSummary={()=>{}} onCopySummary={()=>{}}/>);
+  renders('InternationalMarketPlanner', <InternationalMarketPlanner facts={{ targetMarkets: ['EU'] }} onSave={()=>{}}/>);
 
   it('assessed-case sections render (action why, assistant, profile)', () => {
     const assessment = {

@@ -72,10 +72,15 @@ export function mapInternationalRegimes(classification, facts = {}) {
     add('PCT', 'NOT_CURRENTLY_INDICATED', 'No new technical process or product contribution is recorded yet.', ['Revisit after the technical contribution and filing strategy are defined'], ['pct_system'], false);
   }
 
-  if (facts.commercialIntent === 'export_related' || facts.targetMarket === 'india_and_export') {
+  const selectedMarkets = [...new Set(Array.isArray(facts.targetMarkets) ? facts.targetMarkets : [])];
+  const hasExportIntent = facts.commercialIntent === 'export_related' || facts.targetMarket === 'india_and_export' || selectedMarkets.length > 0;
+  if (hasExportIntent) {
     add('MADRID', 'POSSIBLY_APPLICABLE', 'A commercial brand may be planned through the Madrid System where the applicant and designated countries meet system requirements.', ['Clear the mark nationally first, then compare Madrid designations with direct filings'], ['madrid_system']);
     add('HAGUE', 'REVIEW_RECOMMENDED', 'The Hague System may be relevant to a distinctive product or package design where the applicant and designated countries are eligible.', ['Capture dated product/package drawings before launch and check Hague eligibility'], ['hague_system']);
-    add('EXPORT_MARKET_ACCESS', 'REVIEW_RECOMMENDED', 'An export route requires a separate product classification, claims, labelling and evidence review in every target market.', ['Choose target markets first', 'Classify the product separately in each market and verify the official regulator route'], ['eu_herbal_products_route', 'us_botanical_products_route']);
+    const marketEvidence = ['eu_herbal_products_route', 'us_botanical_products_route'];
+    if (selectedMarkets.includes('UAE')) marketEvidence.push('uae_natural_source_route');
+    if (selectedMarkets.includes('OTHER')) marketEvidence.push('custom_market_route');
+    add('EXPORT_MARKET_ACCESS', 'REVIEW_RECOMMENDED', 'An export route requires a separate product classification, claims, labelling and evidence review in every target market.', ['Choose target markets first', 'Classify the product separately in each market and verify the official regulator route'], marketEvidence);
   } else {
     add('MADRID', 'NOT_CURRENTLY_INDICATED', 'No export or international brand strategy is recorded yet.', ['Revisit if the brand will be protected outside India'], ['madrid_system'], false);
     add('HAGUE', 'NOT_CURRENTLY_INDICATED', 'No export or international design strategy is recorded yet.', ['Revisit if product or package design protection is planned abroad'], ['hague_system'], false);
@@ -172,9 +177,26 @@ export const INTERNATIONAL_CORPUS = [
     sourceKey: 'us_botanical_products_route', title: 'United States botanical-product market access pointer',
     authority: 'U.S. Food and Drug Administration', jurisdiction: INTERNATIONAL_JURISDICTION, documentType: 'guidance', regimes: ['EXPORT_MARKET_ACCESS'],
     publicationDate: '2016-06-01', effectiveFrom: '2016-06-01', version: 'route pointer', status: 'CURRENT',
-    url: 'https://www.fda.gov/drugs/guidance-compliance-regulatory-information/guidances-drugs', sourceLevel: 2, lastVerifiedAt: INTERNATIONAL_VERIFIED,
+    url: 'https://www.fda.gov/about-fda/center-drug-evaluation-and-research-cder/what-botanical-drug', sourceLevel: 2, lastVerifiedAt: INTERNATIONAL_VERIFIED,
     relations: [], notes: 'Entry point only; product claims determine the regulatory route and evidence obligations.',
     chunks: [{ sectionLabel: 'Claims and classification', text: 'US botanical products may follow a dietary supplement or botanical drug route. FDA classification, ingredient status, claims, labelling, manufacturing controls and evidence requirements must be checked before marketing.' }]
+  },
+  {
+    sourceKey: 'uae_natural_source_route', title: 'UAE MoHAP natural-source product registration pointer',
+    authority: 'UAE Ministry of Health and Prevention', jurisdiction: INTERNATIONAL_JURISDICTION, documentType: 'guidance', regimes: ['EXPORT_MARKET_ACCESS'],
+    publicationDate: '2026-08-24', effectiveFrom: '2026-08-24', version: 'official route pointer', status: 'CURRENT',
+    url: 'https://mohap.gov.ae/documents/20117/0/Registration%2Bof%2BA%2BPharmaceutical%2BProduct%2BDerived%2Bfrom%2BNatural%2BSources%2B_%2BMinistry%2Bof%2BHealth%2Band%2BPrevention%2B-%2BUAE.pdf/99e94fbe-6f1d-90e2-e6d1-9eef24d48f87',
+    sourceLevel: 2, lastVerifiedAt: INTERNATIONAL_VERIFIED, relations: [],
+    notes: 'Official pointer only; confirm current classification, registration, licensing and importer requirements before marketing.',
+    chunks: [{ sectionLabel: 'Natural-source product registration', text: 'UAE market planning should check whether the product falls within natural-source or pharmaceutical registration pathways, together with current authority, licensing, importer and local-agent requirements. This pointer is not a market-entry conclusion.' }]
+  },
+  {
+    sourceKey: 'custom_market_route', title: 'Custom target-market verification checklist',
+    authority: 'Target-country regulator', jurisdiction: INTERNATIONAL_JURISDICTION, documentType: 'guidance', regimes: ['EXPORT_MARKET_ACCESS'],
+    publicationDate: INTERNATIONAL_VERIFIED, effectiveFrom: INTERNATIONAL_VERIFIED, version: 'generic checklist', status: 'CURRENT',
+    url: '', sourceLevel: 3, lastVerifiedAt: INTERNATIONAL_VERIFIED, relations: [],
+    notes: 'Generic checklist only; no country-specific requirement is inferred.',
+    chunks: [{ sectionLabel: 'Generic verification checklist', text: 'Identify the competent regulator and product category, then verify claims, ingredients, quality, safety, labelling, import and local licensing obligations directly with the target country.' }]
   }
 ];
 

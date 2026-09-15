@@ -153,6 +153,7 @@ function useWorkspaceLlmStatus(intervalMs = 15000) {
 
 export function CaseWorkspaceView({ api, org, caseId, onBack }) {
   const [kase, setKase] = useState(null), [assessment, setAssessment] = useState(null), [answers, setAnswers] = useState({}), [busy, setBusy] = useState(false), [error, setError] = useState(null), [stage, setStage] = useState('');
+  const [summary, setSummary] = useState(null), [summaryBusy, setSummaryBusy] = useState(false), [summaryError, setSummaryError] = useState(''), [summaryCopied, setSummaryCopied] = useState(false);
   const llm = useWorkspaceLlmStatus(15000);
   async function loadDemo() {
     try { const demo = await apiCall(api, `/api/organizations/${org._id}/sahayak/demo`, { method: 'POST' }); location.hash = `#/case/${demo._id}`; } catch (e) { setError(e); }
@@ -166,7 +167,9 @@ export function CaseWorkspaceView({ api, org, caseId, onBack }) {
     const data = await apiCall(api, `/api/organizations/${org._id}/sahayak/cases/${caseId}`);
     setKase(data);
     const caseMode = data.jurisdictionMode || 'IN';
-    setAssessment(data.latestAssessment && (data.latestAssessment.jurisdictionMode || 'IN') === caseMode ? data.latestAssessment : null);
+    const nextAssessment = data.latestAssessment && (data.latestAssessment.jurisdictionMode || 'IN') === caseMode ? data.latestAssessment : null;
+    setAssessment(nextAssessment);
+    setSummary(nextAssessment?.userSummary || null);
   }
   useEffect(() => { setKase(null); setAssessment(null); load().catch(e => setError(e)); }, [caseId]);
 
@@ -202,6 +205,23 @@ export function CaseWorkspaceView({ api, org, caseId, onBack }) {
     } catch (e) { setError(e); } finally { setBusy(false); }
   }
 
+  async function generateSummary() {
+    if (!assessment || summaryBusy) return;
+    setSummaryBusy(true); setSummaryError(''); setSummaryCopied(false);
+    try {
+      const result = await apiCall(api, `/api/organizations/${org._id}/sahayak/cases/${kase._id}/summary`, { method: 'POST' });
+      setSummary(result); setAssessment(current => current ? { ...current, userSummary: result } : current);
+    } catch (e) { setSummaryError(e?.message || 'Could not generate the summary'); }
+    finally { setSummaryBusy(false); }
+  }
+
+  async function copySummary() {
+    if (!summary) return;
+    const text = [summary.overview, ...(summary.keyPoints || []), 'Next steps:', ...(summary.nextSteps || []), summary.caveat].filter(Boolean).join('\n');
+    try { await navigator.clipboard.writeText(text); setSummaryCopied(true); setTimeout(() => setSummaryCopied(false), 1800); }
+    catch { setSummaryError('Copy is unavailable in this browser.'); }
+  }
+
   if (!kase) return <section className="card">{error ? error : <><Spinner/> Loading case…</>}</section>;
   const openQuestions = (kase.questions || []).filter(q => !q.answered);
   const facts = kase.facts || {};
@@ -227,7 +247,7 @@ export function CaseWorkspaceView({ api, org, caseId, onBack }) {
       action={<div className="row-actions">
         <JurisdictionSwitch value={currentJurisdiction} onChange={changeJurisdiction} disabled={busy}/>
         {onBack && <button className="secondary" onClick={onBack}>← Cases</button>}
-        <button className="secondary" onClick={exportReport} disabled={busy || !assessment} title="Professional handoff PDF">Export report</button>
+        <button className="secondary" onClick={exportReport} disabled={busy || !assessment} title="Download the detailed decision brief PDF">Download decision brief</button>
         <button className="secondary" onClick={() => runAssessment(true)} disabled={busy} title="Adds an untrusted test document to prove injection safety"><ShieldAlert size={15}/> Injection test</button>
         <button className="primary ipsk-btn" onClick={() => runAssessment(false)} disabled={busy}><FileSearch size={15}/> Run assessment</button>
       </div>}/>
@@ -247,6 +267,7 @@ export function CaseWorkspaceView({ api, org, caseId, onBack }) {
     <section className="card case-summary">
       <div><small>Product</small><strong>{kase.productName || kase.title}</strong></div>
       <div><small>Goal</small><strong>{facts.commercialIntent === 'research_only' ? 'Research' : facts.targetMarket === 'india_and_export' ? 'Commercialize in India + export' : currentJurisdiction === 'INTL' ? 'International route planning' : 'Commercialize in India'}</strong></div>
+      {!!facts.targetMarkets?.length && <div><small>Target markets</small><strong>{facts.targetMarkets.map(m => m === 'OTHER' ? (facts.targetMarketOther || 'Custom country') : ({ EU: 'EU', US: 'US', UAE: 'UAE' }[m] || m)).join(', ')}</strong></div>}
       <div><small>Current status</small><strong className="capitalize">{kase.status.replaceAll('_', ' ')}</strong></div>
       {assessment && <div><small>Risk level</small><strong><span className={`badge ${CONF[assessment.confidence]}`}>{assessment.confidence}</span></strong></div>}
       {assessment && <div><small>Assessment</small>
@@ -294,10 +315,18 @@ export function CaseWorkspaceView({ api, org, caseId, onBack }) {
         </form>
       </section>}
 
-      {(kase.classification || assessment?.classification) && <ClassificationCard data={assessment?.classification || kase.classification}/>}
+      {!assessment && (kase.classification || assessment?.classification) && <ClassificationCard data={assessment?.classification || kase.classification}/>}
 
       {assessment && <>
         <JurisdictionNotice assessment={assessment}/>
+        <DecisionSnapshot assessment={assessment} summary={summary} summaryBusy={summaryBusy} summaryError={summaryError} summaryCopied={summaryCopied} onGenerateSummary={generateSummary} onCopySummary={copySummary}/>
+        {(assessment.jurisdictionMode === 'INTL' || facts.commercialIntent === 'export_related' || facts.targetMarket === 'india_and_export') && <InternationalMarketPlanner facts={facts} onSave={async patch => {
+          setBusy(true); setError(null);
+          try {
+            await apiCall(api, `/api/organizations/${org._id}/sahayak/cases/${kase._id}/describe`, { method: 'POST', body: JSON.stringify({ factsPatch: patch }) });
+            await load();
+          } catch (e) { setError(e); } finally { setBusy(false); }
+        }} busy={busy}/>}
         <NarrativeCard narrative={assessment.narrative} confidence={assessment.confidence}/>
         <ComplianceDashboard assessment={assessment}/>
         <CompliancePassportCard api={api} org={org} kase={kase} assessment={assessment}/>
@@ -374,6 +403,7 @@ export function ProductProfileCard({ facts, onEdit, onSave, busy, isStale }) {
     ['Classical formulation', pretty(facts.classicalSource)],
     ['New process', pretty(facts.newProcess)],
     ['Traditional knowledge', pretty(facts.traditionalKnowledgeUse)],
+    ['Target markets', (facts.targetMarkets || []).map(m => m === 'OTHER' ? (facts.targetMarketOther || 'Custom country') : ({ EU: 'European Union', US: 'United States', UAE: 'United Arab Emirates' }[m] || m)).join(', ')],
     ['Biological resources', (facts.ingredients || []).some(i => i.biologicalResource) ? 'Yes' : ''],
     ['Manufacturing location', pretty(facts.manufacturingLocation)]
   ];
@@ -383,8 +413,8 @@ export function ProductProfileCard({ facts, onEdit, onSave, busy, isStale }) {
   function cancel() { setEditing(false); setDraft(facts || {}); }
   function save() {
     const patch = {};
-    for (const k of ['intendedUse', 'dosageForm', 'routeOfAdministration', 'classicalSource', 'newProcess', 'traditionalKnowledgeUse', 'biologicalOriginIndia', 'commercialIntent', 'targetMarket']) {
-      if (draft[k] && draft[k] !== facts?.[k]) patch[k] = draft[k];
+    for (const k of ['intendedUse', 'dosageForm', 'routeOfAdministration', 'classicalSource', 'newProcess', 'traditionalKnowledgeUse', 'biologicalOriginIndia', 'commercialIntent', 'targetMarket', 'targetMarkets', 'targetMarketOther']) {
+      if (draft[k] !== undefined && JSON.stringify(draft[k]) !== JSON.stringify(facts?.[k])) patch[k] = draft[k];
     }
     onSave?.(patch);
     setEditing(false);
@@ -568,6 +598,64 @@ export function TimelineCard({ api, org, kase }) {
   </section>;
 }
 
+const HUMAN_FACT_LABELS = {
+  claims: 'your label or marketing claims', newProcess: 'whether the process is genuinely new', commercialIntent: 'commercial intent',
+  classicalSource: 'the classical source or formulation basis', intendedUse: 'intended use', dosageForm: 'dosage form',
+  routeOfAdministration: 'route of administration', ingredients: 'the complete ingredient list', targetMarkets: 'target markets',
+  targetMarketOther: 'the custom target country', traditionalKnowledgeUse: 'the traditional-knowledge connection'
+};
+const humanFact = key => HUMAN_FACT_LABELS[key] || String(key || '').replace(/([A-Z])/g, ' $1').toLowerCase();
+const confidenceCopy = {
+  HIGH: 'High - the recorded facts and evidence point in the same direction.',
+  MEDIUM: 'Medium - useful for planning, but confirm the highlighted points before relying on it.',
+  LOW: 'Low - important information or supporting evidence is still limited.',
+  ESCALATE: 'Needs human review - the result should be checked by a qualified professional.'
+};
+
+export function DecisionSnapshot({ assessment, summary, summaryBusy, summaryError, summaryCopied, onGenerateSummary, onCopySummary }) {
+  const classification = assessment?.classification || {};
+  const missing = [...new Set([...(classification.missingInformation || []), ...(assessment?.humanReview?.unresolvedQuestions || [])])].map(humanFact);
+  const used = classification.factsUsed?.length || 0;
+  const missingCount = classification.missingInformation?.length || 0;
+  const completeness = used + missingCount ? Math.round((used / (used + missingCount)) * 100) : 0;
+  const topActions = [...(assessment?.actions || [])].sort((a, b) => ({ HIGH: 0, MEDIUM: 1, LOW: 2 }[a.priority] ?? 2) - ({ HIGH: 0, MEDIUM: 1, LOW: 2 }[b.priority] ?? 2)).slice(0, 3);
+  return <section className="card decision-snapshot" aria-labelledby="decision-snapshot-title">
+    <div className="decision-snapshot-head">
+      <div><p className="eyebrow">DECISION SNAPSHOT</p><h2 id="decision-snapshot-title">What this assessment is telling you</h2></div>
+      <span className={`badge ${CONF[assessment?.confidence] || ''}`}>{assessment?.confidence || 'UNKNOWN'}</span>
+    </div>
+    <div className="decision-result">
+      <div><small>Product appears to be</small><strong>{classification.labelLocalized || pretty(classification.primary) || 'Not yet classified'}</strong></div>
+      <div><small>In plain language</small><p>{assessment?.narrative?.assessment || classification.rationale || 'Run the assessment to see the decision.'}</p></div>
+    </div>
+    <div className="decision-metrics">
+      <div><small>What confidence means</small><strong>{confidenceCopy[assessment?.confidence] || 'The result should be checked before you act.'}</strong></div>
+      <div><small>Answer completeness</small><strong>{completeness}% of classification facts recorded</strong><div className="decision-progress"><i style={{ width: `${completeness}%` }}/></div></div>
+      <div><small>What this means</small><strong>{assessment?.narrative?.meaning || 'Review the evidence and next actions below.'}</strong></div>
+    </div>
+    {!!missing.length && <div className="decision-missing"><strong>Still needed to firm this up</strong><ul>{missing.slice(0, 6).map((item, i) => <li key={i}>{item}</li>)}</ul></div>}
+    <details className="decision-change"><summary>What could change this result?</summary><p>Any unresolved fact, new label claim, changed ingredient or different target market can alter the classification or route. Confirm the items below before relying on this assessment.</p><ul>{(assessment?.unknowns || []).slice(0, 5).map((item, i) => <li key={i}>{item.replace(/^Missing fact affects classification\/regime mapping:\s*/i, 'Confirm ')}</li>)}</ul></details>
+    {!!topActions.length && <div className="start-here"><div><p className="eyebrow">START HERE</p><h3>Priority actions before you move forward</h3></div><ol>{topActions.map((action, i) => <li key={i}><strong>{action.title}</strong><small>{action.requiresProfessional ? 'Professional review recommended' : 'You can prepare this now'}{action.why ? ` - ${action.why}` : ''}</small></li>)}</ol></div>}
+    <div className="summary-actions"><button type="button" className="secondary" onClick={onGenerateSummary} disabled={summaryBusy}>{summaryBusy ? <><Spinner/> Preparing summary…</> : <><Sparkles size={14}/> {summary ? 'Refresh plain-language summary' : 'Generate plain-language summary'}</>}</button>{summary && <button type="button" className="text-button" onClick={onCopySummary}>{summaryCopied ? 'Copied' : 'Copy summary'}</button>}</div>
+    {summaryError && <p className="summary-error" role="alert">{summaryError}</p>}
+    {summary && <div className="plain-summary"><div className="plain-summary-head"><strong>{summary.mode === 'AI' ? 'AI plain-language summary' : 'Plain-language summary'}</strong><span className="badge sev-grey">{summary.mode === 'AI' ? `AI · ${summary.provider || 'configured provider'}` : 'Offline-safe deterministic'}</span></div><p>{summary.overview}</p><ul>{summary.keyPoints?.map((point, i) => <li key={i}>{point}</li>)}</ul><h4>Next steps</h4><ol>{summary.nextSteps?.map((step, i) => <li key={i}>{step}</li>)}</ol><small>{summary.caveat}</small></div>}
+  </section>;
+}
+
+export function InternationalMarketPlanner({ facts = {}, onSave, busy = false }) {
+  const [markets, setMarkets] = useState(facts.targetMarkets || []), [other, setOther] = useState(facts.targetMarketOther || ''), [dirty, setDirty] = useState(false);
+  useEffect(() => { setMarkets(facts.targetMarkets || []); setOther(facts.targetMarketOther || ''); setDirty(false); }, [facts.targetMarkets, facts.targetMarketOther]);
+  const toggle = market => setMarkets(value => value.includes(market) ? value.filter(item => item !== market) : [...value, market]);
+  function save() { onSave?.({ targetMarkets: markets, targetMarketOther: markets.includes('OTHER') ? other.trim() : '' }); setDirty(false); }
+  return <section className="card market-planner">
+    <div className="international-panel-head"><div><p className="eyebrow">TARGET-MARKET PLANNER</p><h3 className="card-h"><Globe2 size={16}/> Select where you may launch</h3></div><span className="badge sev-yellow">Checklist only</span></div>
+    <p className="muted small">Treaty systems do not replace target-country law. Select markets to attach separate verification checklists and official pointers to this case.</p>
+    <div className="market-chip-row">{[['EU', 'European Union'], ['US', 'United States'], ['UAE', 'United Arab Emirates'], ['OTHER', 'Custom country']].map(([value, label]) => <button key={value} type="button" className={`chip ${markets.includes(value) ? 'active' : ''}`} aria-pressed={markets.includes(value)} onClick={() => { toggle(value); setDirty(true); }}>{label}</button>)}</div>
+    {markets.includes('OTHER') && <label className="custom-market-field">Custom country<input value={other} onChange={e => { setOther(e.target.value); setDirty(true); }} placeholder="e.g. Singapore" maxLength={120}/></label>}
+    {dirty && <div className="market-planner-save"><span>Save the selected markets to refresh the assessment before relying on the route map.</span><button className="primary ipsk-btn" type="button" disabled={busy || (markets.includes('OTHER') && !other.trim())} onClick={save}>{busy ? <Spinner/> : 'Save markets'}</button></div>}
+  </section>;
+}
+
 export function ClassificationCard({ data }) {
   return <section className="card classify-card">
     <h3 className="card-h"><BadgeCheck size={15}/> Product classification</h3>
@@ -576,9 +664,9 @@ export function ClassificationCard({ data }) {
       {data.labelLocalized && <small className="muted">{data.primary.replaceAll('_', ' ')}</small>}
       <span className={`badge ${CONF[data.confidence] || ''}`}>Confidence: {data.confidence}</span>
     </div>
-    <p className="muted">{data.rationale}</p>
-    {!!data.missingInformation?.length && <p><small>Missing critical facts: {data.missingInformation.join(', ')}</small></p>}
-    {!!data.alternatives?.length && <p><small>Possible alternatives: {data.alternatives.map(x => x.replaceAll('_', ' ')).join(', ')}</small></p>}
+     <p className="muted">{data.rationale}</p>
+     {!!data.missingInformation?.length && <p><small>Still needed: {data.missingInformation.map(humanFact).join(', ')}</small></p>}
+     {!!data.alternatives?.length && <p><small>Could also be: {data.alternatives.map(x => x.replaceAll('_', ' ')).join(', ')}</small></p>}
   </section>;
 }
 

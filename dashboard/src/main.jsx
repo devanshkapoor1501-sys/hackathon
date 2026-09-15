@@ -374,7 +374,7 @@ function llmDisplay(data) {
   const latency = data.latencyMs != null ? ` · ${data.latencyMs}ms` : '';
   switch (data.status) {
     case 'READY':
-      return { cls: 'on', label: 'Connected', detail: `${data.model}${latency}` };
+      return { cls: 'on', label: data.fallbackUsed ? 'Connected fallback' : 'Connected', detail: `${data.activeProvider || data.provider || 'configured provider'} · ${data.model}${latency}` };
     case 'NO_MODEL_LOADED':
       return { cls: 'warn', label: 'No model loaded', detail: data.reason || 'configured AI providers have no usable model' };
     case 'MODEL_NOT_CONFIGURED':

@@ -32,6 +32,7 @@ export class HybridProvider extends AIProvider {
     const info = (configured || this.providers[0])?.getModelInfo?.() || {};
     return {
       id: this.id,
+      activeProvider: this.lastActiveProvider,
       baseURL: info.baseURL || null,
       reasoningModel: info.reasoningModel || null,
       embeddingModel: info.embeddingModel || null,

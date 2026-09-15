@@ -62,8 +62,8 @@ export function MarketRoutesCard({ assessment }) {
   const routes = assessment?.marketRoutes || [];
   return <section className="card advanced-card">
     <h3 className="card-h"><Globe2 size={15}/> Market routes <small>explicit jurisdiction packs</small></h3>
-    <div className="market-grid">{routes.map(r => <article key={r.id} className="market-route"><div className="advanced-head"><strong>{r.name}</strong><span className="badge sev-green">{r.status}</span></div><small>{r.authority}</small><ul className="tiny-list">{(r.steps || []).map((s, i) => <li key={i}>{s}</li>)}</ul>{r.officialUrl && <a href={r.officialUrl} target="_blank" rel="noreferrer">Official source <ExternalLink size={11}/></a>}</article>)}</div>
-    {!routes.some(r => r.id !== 'IN') && <p className="muted small">Select export planning in the product facts to unlock WIPO/PCT and EU jurisdiction cards.</p>}
+    <div className="market-grid">{routes.map(r => <article key={r.id} className="market-route"><div className="advanced-head"><strong>{r.name}</strong><span className={`badge ${r.status === 'MARKET_SELECTION_REQUIRED' ? 'sev-yellow' : r.status === 'MARKET_CHECKLIST' ? 'sev-grey' : 'sev-green'}`}>{r.status.replaceAll('_', ' ')}</span></div><small>{r.authority}</small><ul className="tiny-list">{(r.steps || []).map((s, i) => <li key={i}>{s}</li>)}</ul>{r.officialUrl && <a href={r.officialUrl} target="_blank" rel="noreferrer">Official source <ExternalLink size={11}/></a>}{r.disclaimer && <small className="route-disclaimer">{r.disclaimer}</small>}</article>)}</div>
+    {!routes.some(r => r.id !== 'IN' && r.id !== 'WIPO') && <p className="muted small">Select a target market above to attach a separate verification checklist.</p>}
   </section>;
 }
 

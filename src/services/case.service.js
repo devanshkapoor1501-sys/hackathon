@@ -14,6 +14,55 @@ import { AppError, llmOffline, retrievalEmpty } from '../utils/errors.js';
 import { analyzeClaims, buildCompliancePassport, buildMarketRoutes, buildFilingPack, buildSafetySummary, buildChangeAlerts } from '../rules/compliance-intelligence.js';
 
 const NARRATIVE_SCHEMA = `{ assessment: string, meaning: string }`;
+const SUMMARY_SCHEMA = `{ overview: string, keyPoints: string[], nextSteps: string[], caveat: string }`;
+const FACT_LABELS = {
+  intendedUse: 'intended use', dosageForm: 'dosage form', routeOfAdministration: 'route of administration',
+  classicalSource: 'classical source or formulation basis', claims: 'label or marketing claims',
+  commercialIntent: 'commercial intent', newProcess: 'whether the process is genuinely new', ingredients: 'ingredient list',
+  targetMarkets: 'target markets', targetMarketOther: 'custom target country', biologicalOriginIndia: 'biological origin',
+  traditionalKnowledgeUse: 'traditional-knowledge connection'
+};
+
+export function humanizeFactKey(key) {
+  return FACT_LABELS[key] || String(key || '').replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).toLowerCase();
+}
+
+export function buildDeterministicSummary({ kase, assessment, language = assessment?.language || kase?.language || 'en' } = {}) {
+  const classification = assessment?.classification || {};
+  const label = classification.labelLocalized || String(classification.primary || 'unresolved classification').replaceAll('_', ' ').toLowerCase();
+  const missing = (classification.missingInformation || []).map(humanizeFactKey);
+  const activeRegimes = (assessment?.regimes || []).filter(r => ['APPLICABLE', 'POSSIBLY_APPLICABLE', 'REVIEW_RECOMMENDED'].includes(r.relevance));
+  const verified = (assessment?.evidence || []).filter(e => e.verified).length;
+  const actions = (assessment?.actions || []).slice(0, 4).map(a => a.title).filter(Boolean);
+  const markets = (kase?.facts?.targetMarkets || []).map(m => m === 'OTHER' ? (kase?.facts?.targetMarketOther || 'custom country') : m).join(', ');
+  const confidence = assessment?.confidence || classification.confidence || 'LOW';
+  if (language === 'hi') {
+    return {
+      overview: `इस मामले में उत्पाद ${label} जैसा प्रतीत होता है। यह प्रारंभिक निर्णय उपलब्ध संरचित तथ्यों और ${verified} सत्यापित संदर्भों पर आधारित है।`,
+      keyPoints: [
+        `विश्वास स्तर ${confidence} है; इसका अर्थ है कि परिणाम को पेशेवर समीक्षा से पहले अंतिम निष्कर्ष न माना जाए।`,
+        activeRegimes.length ? `जांच के लिए क्षेत्र: ${activeRegimes.map(r => r.labelLocalized || r.regime).join(', ')}।` : 'कोई प्रमुख नियामक क्षेत्र अभी स्पष्ट नहीं है।',
+        missing.length ? `इन जानकारी से परिणाम बदल सकता है: ${missing.join(', ')}।` : 'वर्तमान में कोई प्रमुख वर्गीकरण तथ्य लंबित नहीं है।',
+        markets ? `चयनित लक्ष्य बाजार: ${markets}।` : ''
+      ].filter(Boolean),
+      nextSteps: actions.length ? actions : ['उत्पाद के दावों और सामग्री की समीक्षा करें', 'योग्य नियामक या IP पेशेवर से पुष्टि लें'],
+      caveat: 'यह सुरक्षित deterministic सारांश है; AI व्याख्या उपलब्ध नहीं थी। यह कानूनी सलाह या सरकारी स्वीकृति नहीं है।',
+      language: 'hi', mode: 'DETERMINISTIC', provider: null, generatedAt: new Date().toISOString()
+    };
+  }
+  return {
+    overview: `This case currently appears to be ${label}. The result is based on the stored facts and ${verified} verified evidence reference(s).`,
+    keyPoints: [
+      `Confidence is ${confidence}; treat this as decision support, not a final legal or regulatory conclusion.`,
+      activeRegimes.length ? `Areas to check: ${activeRegimes.map(r => r.label || r.regime.replaceAll('_', ' ')).join(', ')}.` : 'No major regulatory area is currently indicated.',
+      missing.length ? `This result could change when you confirm: ${missing.join(', ')}.` : 'No major classification fact is currently outstanding.',
+      markets ? `Selected target markets: ${markets}.` : ''
+    ].filter(Boolean),
+    nextSteps: actions.length ? actions : ['Review the product claims and ingredient record', 'Confirm the route with a qualified regulatory or IP professional'],
+    caveat: 'This is a safe deterministic summary because no AI explanation was available. It is decision support, not legal advice or government approval.',
+    language: 'en', mode: 'DETERMINISTIC', provider: null, generatedAt: new Date().toISOString()
+  };
+}
 
 function llmFallbackSummary(assessment, question) {
   const international = assessment?.jurisdictionMode === INTERNATIONAL_JURISDICTION;
@@ -286,7 +335,7 @@ Keep the answer under 120 words.`;
     return citations;
   }
 
-  collectInternationalCitations({ regimes }) {
+  collectInternationalCitations({ regimes, facts = {} }) {
     const citations = [];
     const add = (regime, sourceKey, section, claim) => citations.push({ regime, sourceKey, section, claim });
     for (const regime of regimes) {
@@ -301,8 +350,11 @@ Keep the answer under 120 words.`;
       if (regime.regime === 'HAGUE') add('HAGUE', 'hague_system', 'International design route', 'The Hague System allows applicants to seek industrial design protection in multiple designated jurisdictions through one international application');
       if (regime.regime === 'BUDAPEST') add('BUDAPEST', 'budapest_treaty', 'Recognised microorganism deposits', 'The Budapest Treaty supports international recognition of a microorganism deposit for patent procedure');
       if (regime.regime === 'EXPORT_MARKET_ACCESS') {
-        add('EXPORT_MARKET_ACCESS', 'eu_herbal_products_route', 'Classification before export', 'EU herbal product market access depends on whether a product is treated as a medicinal product, food supplement or cosmetic');
-        add('EXPORT_MARKET_ACCESS', 'us_botanical_products_route', 'Claims and classification', 'US botanical products may follow a dietary supplement or botanical drug route');
+        const selected = new Set(facts.targetMarkets || []);
+        if (!selected.size || selected.has('EU')) add('EXPORT_MARKET_ACCESS', 'eu_herbal_products_route', 'Classification before export', 'EU herbal product market access depends on whether a product is treated as a medicinal product, food supplement or cosmetic');
+        if (!selected.size || selected.has('US')) add('EXPORT_MARKET_ACCESS', 'us_botanical_products_route', 'Claims and classification', 'US botanical products may follow a dietary supplement, botanical drug, food or cosmetic route');
+        if (selected.has('UAE')) add('EXPORT_MARKET_ACCESS', 'uae_natural_source_route', 'Natural-source product registration', 'UAE market planning should check natural-source or pharmaceutical registration, licensing and importer requirements');
+        if (selected.has('OTHER')) add('EXPORT_MARKET_ACCESS', 'custom_market_route', 'Generic verification checklist', 'A custom target country requires direct verification of its regulator, classification, claims, labelling, safety and import requirements');
       }
     }
     return citations;
@@ -358,7 +410,7 @@ Keep the answer under 120 words.`;
 
     // 5. Evidence: rules cite seeded sources; each citation is verified against corpus chunks.
     const citations = selectedJurisdiction === INTERNATIONAL_JURISDICTION
-      ? this.collectInternationalCitations({ regimes: regimeMap })
+      ? this.collectInternationalCitations({ regimes: regimeMap, facts })
       : this.collectRuleCitations({ classification, regimes: regimeMap, absScreen });
     const evidence = [];
     for (const citation of citations) {
@@ -440,7 +492,7 @@ Keep the answer under 120 words.`;
     };
 
     // 10. LLM synthesis — explanation ONLY over verified evidence (graceful fallback otherwise)
-    let narrative = this.templateNarrative(classification, regimeMap, evidence, kase.language);
+    let narrative = this.templateNarrative(classification, regimeMap, evidence, kase.language, selectedJurisdiction);
     let llmUsed = false;
     try {
       const provider = getProviderForTask('reasoning');
@@ -517,7 +569,7 @@ VERIFIED EVIDENCE:\n${evidenceBlock || '(none — say that authoritative evidenc
       confidenceFactors: confidenceResult.factors,
       humanReview,
       llmUsed,
-      llmProviderInfo: llmUsed ? getProviderForTask('reasoning').getModelInfo() : { fallback: 'template', error: this.lastLLMError }
+      llmProviderInfo: llmUsed ? getProviderForTask('reasoning').getModelInfo() : { fallback: 'template', error: this.lastLLMError, attemptedProviders: (await getProviderForTask('reasoning').healthCheck().catch(() => null))?.attempts || [] }
     };
 
     kase.latestAssessment = assessment;
@@ -527,23 +579,73 @@ VERIFIED EVIDENCE:\n${evidenceBlock || '(none — say that authoritative evidenc
     return assessment;
   }
 
-  templateNarrative(classification, regimes, evidence, language = 'en') {
+  templateNarrative(classification, regimes, evidence, language = 'en', jurisdiction = 'IN') {
     const verifiedCount = evidence.filter(e => e.verified).length;
     if (language === 'hi') {
       const applicable = regimes.filter(r => ['APPLICABLE', 'POSSIBLY_APPLICABLE'].includes(r.relevance)).map(r => t('hi', 'REGIME_LABELS', r.regime)).join(', ');
+      const sourceLabel = jurisdiction === INTERNATIONAL_JURISDICTION ? 'अंतरराष्ट्रीय संदर्भ स्रोतों' : 'भारतीय प्रामाणिक स्रोतों';
       return {
         assessment: `संरचित तथ्यों के आधार पर, उत्पाद प्रतीत होता है: ${t('hi', 'CLASSIFICATION_LABELS', classification.primary)}। ${classification.rationale}`,
         meaning: verifiedCount
-          ? `यह निष्कर्ष भारतीय प्रामाणिक स्रोतों के ${verifiedCount} सत्यापित संदर्भ(ओं) द्वारा समर्थित है। संभावित रूप से लागू क्षेत्र: ${applicable || 'कोई नहीं'}।`
-          : 'कॉन्फ़िगर किए गए प्रामाणिक स्रोत से इस परिणाम को सत्यापित करने में असमर्थ।'
+          ? `यह निष्कर्ष ${sourceLabel} के ${verifiedCount} सत्यापित संदर्भ(ओं) द्वारा समर्थित है। संभावित रूप से लागू क्षेत्र: ${applicable || 'कोई नहीं'}।`
+          : `कॉन्फ़िगर किए गए ${sourceLabel} से इस परिणाम को पर्याप्त रूप से सत्यापित नहीं किया जा सका।`
       };
     }
+    const classificationLabel = t('en', 'CLASSIFICATION_LABELS', classification.primary) || String(classification.primary || 'an unresolved category').replaceAll('_', ' ');
+    const sourceLabel = jurisdiction === INTERNATIONAL_JURISDICTION ? 'international reference points' : 'Indian authoritative sources';
     return {
-      assessment: `Based on structured facts, the product appears to be: ${classification.primary}. ${classification.rationale}`,
+      assessment: `Based on the recorded facts, the product appears to be: ${classificationLabel}. ${classification.rationale}`,
       meaning: verifiedCount
-        ? `This conclusion is supported by ${verifiedCount} verified reference(s) from Indian authoritative sources. Regimes potentially applicable: ${regimes.filter(r => ['APPLICABLE', 'POSSIBLY_APPLICABLE'].includes(r.relevance)).map(r => r.regime).join(', ') || 'none identified'}.`
-        : 'Unable to verify this result from the configured authoritative source corpus.'
+        ? `This conclusion is supported by ${verifiedCount} verified reference(s) from ${sourceLabel}. Regimes potentially applicable: ${regimes.filter(r => ['APPLICABLE', 'POSSIBLY_APPLICABLE'].includes(r.relevance)).map(r => t('en', 'REGIME_LABELS', r.regime) || r.regime.replaceAll('_', ' ')).join(', ') || 'none identified'}.`
+        : `The configured ${sourceLabel} did not provide enough verified evidence to firm up this result.`
     };
+  }
+
+  async generatePlainLanguageSummary(kase) {
+    const assessment = kase.latestAssessment;
+    if (!assessment) throw new AppError(400, 'ASSESSMENT_REQUIRED', 'Run an assessment before generating a summary');
+    const language = normalizeLanguage(kase.language || assessment.language);
+    const context = {
+      facts: kase.facts?.toObject?.() || kase.facts || {},
+      classification: assessment.classification,
+      confidence: assessment.confidence,
+      regimes: (assessment.regimes || []).map(r => ({ regime: r.regime, label: r.label, relevance: r.relevance, why: r.why })),
+      verifiedEvidence: (assessment.evidence || []).filter(e => e.verified).map(e => ({ claim: e.claim, authority: e.authority, section: e.section, status: e.status, jurisdiction: e.jurisdiction })),
+      risks: assessment.risks || [],
+      unknowns: assessment.unknowns || [],
+      actionPlan: assessment.actions || [],
+      humanReview: assessment.humanReview || {}
+    };
+    let summary;
+    try {
+      const provider = getProviderForTask('reasoning');
+      if (!provider.chatModel) throw new Error('No configured AI provider');
+      const languageDirective = language === 'hi'
+        ? 'Write natural, plain Hindi in Devanagari. Keep product classification names, regulator names and section numbers in English when helpful.'
+        : 'Write clear, plain-language English for a non-lawyer.';
+      const { data } = await provider.generateStructured({
+        schema: SUMMARY_SCHEMA,
+        schemaName: 'PlainLanguageAssessmentSummary',
+        system: `You explain an existing IP-SAKTI assessment. Use ONLY the stored facts, deterministic conclusions, verified evidence, risks, unknowns and action plan in the prompt. Do not add laws, approvals, deadlines, market-entry conclusions or facts. Do not call the product compliant, patentable or approved. Keep overview under 80 words, keyPoints and nextSteps to 4 items each, and caveat under 50 words. ${languageDirective}`,
+        prompt: JSON.stringify(context), maxTokens: 900
+      });
+      if (!data || typeof data.overview !== 'string' || !Array.isArray(data.keyPoints) || !Array.isArray(data.nextSteps) || typeof data.caveat !== 'string') throw new Error('Summary schema was incomplete');
+      const info = provider.getModelInfo?.() || {};
+      summary = {
+        overview: data.overview.trim(), keyPoints: data.keyPoints.map(String).map(s => s.trim()).filter(Boolean).slice(0, 4),
+        nextSteps: data.nextSteps.map(String).map(s => s.trim()).filter(Boolean).slice(0, 4), caveat: data.caveat.trim(),
+        language, mode: 'AI', provider: info.activeProvider || provider.id || null, generatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      this.lastLLMError = String(error.message || error).slice(0, 200);
+      summary = buildDeterministicSummary({ kase, assessment, language });
+    }
+    assessment.userSummary = summary;
+    const history = kase.assessments || [];
+    const latest = history[history.length - 1];
+    if (latest) latest.userSummary = summary;
+    await kase.save();
+    return summary;
   }
 
   /** Temporal intelligence helper: which version applied at a date vs now. */

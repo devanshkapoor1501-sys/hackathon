@@ -20,6 +20,8 @@ const FACTS_SCHEMA_TS = `{
   traditionalKnowledgeUse: "direct_traditional_use"|"modified_traditional"|"fully_novel"|"unknown",
   commercialIntent: "yes_commercial_sale_india"|"research_only"|"personal_use"|"export_related"|"unknown",
   targetMarket: "india_only"|"india_and_export"|"unknown",
+  targetMarkets: ("EU"|"US"|"UAE"|"OTHER")[],
+  targetMarketOther: string,
   userType: "startup_msme"|"practitioner"|"researcher_student"|"manufacturer"|"farmer_grower"|"other"|"unknown"
 }`;
 
