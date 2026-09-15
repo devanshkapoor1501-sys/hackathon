@@ -1,7 +1,7 @@
 import { AIProvider } from './provider.js';
 
 /**
- * Cloud-first provider chain. The wrapper is intentionally small and keeps
+ * Qwen-first provider chain. The wrapper is intentionally small and keeps
  * provider-specific protocol details inside each underlying provider.
  */
 export class HybridProvider extends AIProvider {
@@ -19,12 +19,16 @@ export class HybridProvider extends AIProvider {
       || null;
   }
 
+  #embeddingProvider() {
+    return this.providers.find(provider => provider.isConfigured?.() && provider.embeddingModel) || null;
+  }
+
   get chatModel() {
     return this.#preferredProvider()?.chatModel || '';
   }
 
   get embeddingModel() {
-    return this.#preferredProvider()?.embeddingModel || '';
+    return this.#embeddingProvider()?.embeddingModel || '';
   }
 
   getModelInfo() {
@@ -35,7 +39,8 @@ export class HybridProvider extends AIProvider {
       activeProvider: this.lastActiveProvider,
       baseURL: info.baseURL || null,
       reasoningModel: info.reasoningModel || null,
-      embeddingModel: info.embeddingModel || null,
+      embeddingModel: this.#embeddingProvider()?.embeddingModel || null,
+      embeddingProvider: this.#embeddingProvider()?.id || null,
       providers: this.providers.map(provider => provider.getModelInfo?.()).filter(Boolean)
     };
   }
@@ -62,7 +67,22 @@ export class HybridProvider extends AIProvider {
 
   async generate(options) { return this.#withFallback(provider => provider.generate(options)); }
   async generateStructured(options) { return this.#withFallback(provider => provider.generateStructured(options)); }
-  async embed(texts, inputType) { return this.#withFallback(provider => provider.embed(texts, inputType)); }
+  async embed(texts, inputType) {
+    const providers = this.providers.filter(provider => provider.isConfigured?.() && provider.embeddingModel);
+    let lastError = null;
+    for (const provider of providers) {
+      try {
+        const result = await provider.embed(texts, inputType);
+        this.lastActiveProvider = provider.id;
+        return result;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    const error = lastError || new Error('No AI embedding provider is configured');
+    error.code ||= 'NO_AI_PROVIDER';
+    throw error;
+  }
 
   async *stream(options) {
     let lastError = null;

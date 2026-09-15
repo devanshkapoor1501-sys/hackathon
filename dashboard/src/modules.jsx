@@ -373,7 +373,7 @@ export function ClassificationPage({ api, org, onNewCase, onOpenCase }) {
       <>
         <CaseScopeBar cases={cases} selectedId={selectedId} setSelectedId={setSelectedId} page="classification"/>
         <JurisdictionBoundary kase={kase}/>
-        {error && <div className="alert page-alert">{error}</div>}
+        {error && <div className="alert page-alert">{error.message || String(error)}</div>}
         {!kase ? null : !classification ? <NoAssessment/> : <div className="workspace-grid">
           <section className="card classify-hero">
             <p className="eyebrow">LIKELY CLASSIFICATION</p>

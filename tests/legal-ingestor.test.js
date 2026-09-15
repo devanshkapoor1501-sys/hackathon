@@ -72,6 +72,15 @@ describe('ingestion metadata validation', () => {
     expect(result.ok).toBe(true);
     expect(result.source.regimes).toEqual(['AYUSH', 'FOOD']);
     expect(result.source.jurisdiction).toBe('IN');
+    expect(result.source.trainingEligibility).toBe('RETRIEVAL_ONLY');
+    expect(result.source.ingestionStatus).toBe('UPLOADED_DOCUMENT');
+  });
+
+  it('records explicit source-use policy and attribution', () => {
+    const result = buildIngestPayload({ ...valid, trainingEligibility: 'TRAINING_ELIGIBLE', attribution: 'Official ministry text; research use permitted' });
+    expect(result.ok).toBe(true);
+    expect(result.source.trainingEligibility).toBe('TRAINING_ELIGIBLE');
+    expect(result.source.attribution).toMatch(/Official ministry/);
   });
 
   it('accepts formulary sources used by the seeded AFI corpus', () => {

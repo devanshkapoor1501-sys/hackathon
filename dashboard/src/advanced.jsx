@@ -104,6 +104,25 @@ export function ReviewWorkflowCard({ api, org, kase, assessment }) {
   return <section className="card advanced-card review-card"><h3 className="card-h"><FileText size={15}/> Professional review <small>controlled handoff workflow</small></h3><form onSubmit={save} className="review-form"><select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}><option>NOT_STARTED</option><option>IN_REVIEW</option><option>NEEDS_INFORMATION</option><option>VERIFIED_BY_REVIEWER</option></select><input value={form.reviewerRole} onChange={e => setForm({ ...form, reviewerRole: e.target.value })} placeholder="Reviewer type (patent agent, AYUSH, ABS…)"/><textarea value={form.comments} onChange={e => setForm({ ...form, comments: e.target.value })} rows="2" placeholder="Review comments or missing information"/><button className="secondary"><Check size={14}/> {saved ? 'Saved' : 'Save review status'}</button></form></section>;
 }
 
+export function ModelFeedbackCard({ api, org, kase }) {
+  const [task, setTask] = useState('assessment_summary');
+  const [rating, setRating] = useState('NEEDS_CORRECTION');
+  const [correctedAnswer, setCorrectedAnswer] = useState('');
+  const [correctionNotes, setCorrectionNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  async function submit(e) {
+    e.preventDefault(); setBusy(true); setSaved(false); setError('');
+    try {
+      await apiCall(api, `/api/organizations/${org._id}/sahayak/cases/${kase._id}/model-feedback`, { method: 'POST', body: JSON.stringify({ task, rating, correctedAnswer, correctionNotes }) });
+      setSaved(true); setCorrectedAnswer(''); setCorrectionNotes('');
+    } catch (err) { setError(err.message || 'Feedback could not be queued'); }
+    finally { setBusy(false); }
+  }
+  return <section className="card advanced-card review-card"><h3 className="card-h"><RefreshCw size={15}/> Improve the model <small>human-approved learning queue</small></h3><p className="muted small">Submit only source-backed corrections. An owner/admin must approve feedback before it can enter Qwen fine-tuning.</p><form onSubmit={submit} className="review-form"><div className="form-grid"><select value={task} onChange={e => setTask(e.target.value)}><option value="assessment_summary">Assessment summary</option><option value="assistant">Assistant answer</option><option value="intake">Fact extraction</option></select><select value={rating} onChange={e => setRating(e.target.value)}><option value="NEEDS_CORRECTION">Needs correction</option><option value="CORRECT">Correct</option><option value="UNSUPPORTED">Unsupported</option></select></div>{rating === 'NEEDS_CORRECTION' && <textarea value={correctedAnswer} onChange={e => setCorrectedAnswer(e.target.value)} rows="3" placeholder="Write the corrected answer" required/>}<textarea value={correctionNotes} onChange={e => setCorrectionNotes(e.target.value)} rows="2" placeholder="Why is this correction source-backed?"/><button className="secondary" disabled={busy}><RefreshCw size={14}/> {saved ? 'Queued for approval' : busy ? 'Submitting…' : 'Submit model feedback'}</button>{error && <p className="warnline">{error}</p>}</form></section>;
+}
+
 export function WhatIfCard({ api, org, kase }) {
   const [result, setResult] = useState(null); const [busy, setBusy] = useState(false);
   async function compare(factsPatch) { setBusy(true); try { setResult(await apiCall(api, `/api/organizations/${org._id}/sahayak/cases/${kase._id}/scenarios/compare`, { method: 'POST', body: JSON.stringify({ factsPatch }) })); } finally { setBusy(false); } }

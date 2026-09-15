@@ -2,6 +2,13 @@
 
 This document maps every source in the jurisdiction-tagged legal corpus to its authority level, jurisdiction, official URL where it can be re-verified, and the date the entry was last checked. Sources are ingested by `npm run seed:legal` and the corpus is structured by `sourceKey` in [`scripts/seed-legal-corpus.js`](../scripts/seed-legal-corpus.js).
 
+The machine-readable manifest is generated with `npm run sources:manifest` at
+`training/artifacts/source-manifest.json`. It records authority, URL,
+jurisdiction, version, effective dates, attribution, ingestion state and
+training eligibility for every seeded source plus the catalogued WIPO systems.
+The first release keeps PATENTSCOPE bibliographic data `EXCLUDED` and treats
+restricted TKDL material as a pointer only.
+
 ## Authority taxonomy
 
 | Level | Meaning | Example | Weight in retrieval |

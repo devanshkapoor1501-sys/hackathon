@@ -7,3 +7,11 @@ uploads/
 coverage/
 *.log
 .DS_Store
+venv/
+__pycache__/
+*.py[cod]
+training/artifacts/*-lora/
+training/artifacts/*-merged/
+training/artifacts/*.gguf
+training/artifacts/model-comparison.json
+training/review/approved.jsonl

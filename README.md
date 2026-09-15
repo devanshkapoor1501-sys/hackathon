@@ -100,7 +100,7 @@ Invoke-RestMethod http://localhost:3000/health/llm
 
 AI is opt-in and the browser never receives provider credentials. The hybrid chain is:
 
-`NVIDIA → Gemini → LM Studio → deterministic mode`
+`trained Ollama model → Qwen3-8B → Qwen3-4B → NVIDIA → Gemini → LM Studio → deterministic mode`
 
 Enable the backup chain with:
 
@@ -110,7 +110,27 @@ NVIDIA_API_KEY=your-nvidia-key
 GEMINI_API_KEY=your-google-ai-studio-key
 ```
 
-The provider order is `NVIDIA → Gemini → LM Studio → deterministic mode`. Gemini is attempted only when `GEMINI_API_KEY` is present; the application does not make a Gemini request when the key is empty. If NVIDIA is unavailable and Gemini is configured, Gemini is the backup provider.
+The provider order is `trained Ollama model → Qwen3-8B → Qwen3-4B → NVIDIA → Gemini → LM Studio → deterministic mode`. Qwen3-8B is the default local RAG answer model; Qwen3-4B is used automatically if 8B is unavailable. The trained leg is enabled only when `TRAINED_MODEL_ENABLED=true`, `TRAINED_MODEL` names a loaded model, and `TRAINED_MODEL_MANIFEST` points to a deployment manifest whose `deploymentGate.passed` is `true`. Gemini is attempted only when `GEMINI_API_KEY` is present; the application does not make a Gemini request when the key is empty.
+
+The assistant remains RAG-based: deterministic classification and retrieval select verified, jurisdiction-scoped evidence first, and Qwen only synthesizes from that evidence. Retrieved documents are treated as data, not instructions; the deterministic engines and citation verifier remain authoritative.
+
+The trained model is expected to be a merged, quantized Qwen3-8B artifact produced by the review-gated QLoRA workflow in [`training/README.md`](training/README.md). To enable it through Ollama:
+
+```dotenv
+TRAINED_MODEL_ENABLED=true
+TRAINED_MODEL_BASE_URL=http://localhost:11434/v1
+TRAINED_MODEL_API_KEY=ollama
+TRAINED_MODEL=ip-sakti-qwen3-8b
+TRAINED_MODEL_MANIFEST=C:\\path\\to\\deployment-manifest.json
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_API_KEY=ollama
+OLLAMA_MODEL=qwen3:8b
+OLLAMA_FALLBACK_MODEL=qwen3:4b
+OLLAMA_KEEP_ALIVE=30m
+OLLAMA_NUM_CTX=8192
+OLLAMA_NUM_PREDICT=1600
+OLLAMA_THINK=false
+```
 
 To use Gemini directly instead of the hybrid chain:
 
@@ -249,8 +269,9 @@ A 1-page **judge brief** for SIH evaluators is at [`docs/JUDGE-BRIEF.md`](docs/J
 | Deterministic engines | `src/rules` (classification, regimes, ABS, TK/s.3(p), questions) |
 | Retrieval | `src/retrieval/legal-retrieval.service.js` (BM25 ⊕ vector ⊕ authority ⊕ temporal) |
 | Evidence verification | `src/evidence/citation-verifier.js`, `timeline.js` |
-| LLM abstraction | `src/ai` (NVIDIA → Gemini → LM Studio → deterministic fallback; structured output with safe fallback) |
+| LLM abstraction | `src/ai` (trained Ollama → Qwen3-8B → Qwen3-4B → NVIDIA → Gemini → LM Studio → deterministic fallback; structured output with safe fallback) |
 | Indian legal corpus | `scripts/seed-legal-corpus.js` (+ admin ingestion via System page) |
+| Training pipeline | `training/` and `scripts/prepare-training-data.js` (review-gated Qwen3-8B QLoRA preparation) |
 | Evaluation harness | `src/evaluation` |
 | Frontend | `dashboard/src` (React + Vite: `main.jsx` shell, `sahayak.jsx` workspace, `modules.jsx` pages) |
 

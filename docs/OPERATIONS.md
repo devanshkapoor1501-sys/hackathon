@@ -13,14 +13,15 @@ A quick reference for the maintainer / on-call when something goes wrong with th
 curl -s http://localhost:3000/health/llm | jq
 ```
 - If `connectivity: "OFFLINE"` and `status: "OFFLINE"` → provider is unreachable.
-- If `connectivity: "OFFLINE"` and `status: "NO_MODEL_LOADED"` → server is up but no model is loaded in LM Studio.
-- If `connectivity: "OFFLINE"` and `status: "MODEL_MISMATCH"` → the model in `LMSTUDIO_MODEL` is not the one currently loaded.
+- If `connectivity: "OFFLINE"` and `status: "NO_MODEL_LOADED"` → a configured local OpenAI-compatible server is up but no requested model is loaded.
+- If `connectivity: "OFFLINE"` and `status: "MODEL_MISMATCH"` → the requested trained/Ollama/LM Studio model is not the one currently loaded.
 
 **Fix:**
 1. For the default hybrid mode, set `LLM_PROVIDER=hybrid`.
 2. For Gemini, set `LLM_PROVIDER=gemini`, `GEMINI_API_KEY=…`, `GEMINI_CHAT_MODEL=gemini-3.6-flash`, and `GEMINI_REASONING_EFFORT=low`.
-3. For NVIDIA cloud AI, set `NVIDIA_API_KEY=…`; for optional local fallback, set `LMSTUDIO_BASE_URL=http://localhost:1234/v1` and `LMSTUDIO_MODEL=<the exact model id>`.
-4. Restart the backend; the dashboard polls `/health/llm` and reports the active provider and fallback attempts.
+3. The default local chain is Qwen3-8B (`OLLAMA_MODEL=qwen3:8b`) followed by Qwen3-4B (`OLLAMA_FALLBACK_MODEL=qwen3:4b`). Set `OLLAMA_BASE_URL=http://localhost:11434/v1`; the 8B leg is health-checked and skipped automatically if its exact model id is not loaded. For the trained primary model, set `TRAINED_MODEL_ENABLED=true`, `TRAINED_MODEL_BASE_URL`, `TRAINED_MODEL=<the exact loaded model id>`, and `TRAINED_MODEL_MANIFEST=<path to deployment-manifest.json>`. The manifest must contain `deploymentGate.passed=true`; otherwise the trained provider is intentionally excluded from the chain.
+4. For NVIDIA cloud AI, set `NVIDIA_API_KEY=…`. LM Studio remains supported as a legacy local fallback with `LMSTUDIO_BASE_URL=http://localhost:1234/v1` and `LMSTUDIO_MODEL=<the exact model id>`.
+5. Restart the backend; the dashboard polls `/health/llm` and reports the active provider and fallback attempts. The application retrieves verified, jurisdiction-scoped evidence before Qwen generates an explanation; model output never replaces citation verification.
 
 **Important:** the system continues to function in deterministic mode. Classification, regime mapping, citation verification and the action plan are all produced by the engines without the LLM; only the narrative explanation falls back to a template.
 

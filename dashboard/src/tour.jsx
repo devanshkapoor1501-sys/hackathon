@@ -73,7 +73,7 @@ const HELP_ENTRIES = [
   { q: 'Why does human review appear?', a: 'When evidence is insufficient, the source is contested, or the legal interpretation requires a professional, IP-SAKTI surfaces it instead of inventing an answer. The recommended professional type is shown.' },
   { q: 'How are sources selected?', a: 'Hybrid retrieval (BM25 + vector + authority ranking + temporal filtering) over an India-only legal corpus. Each citation is verified for source, jurisdiction, status and effective dates before being shown.' },
   { q: 'Does this replace a lawyer?', a: 'No. IP-SAKTI is decision support. It does not file applications, give legal advice, or replace qualified professionals. It tells you what to investigate and what questions to take to them.' },
-  { q: 'Do I need LM Studio?', a: 'No. The default hybrid mode tries configured cloud AI first, then optional LM Studio, and finally deterministic mode. Classification, evidence, action plans and reports continue to work without an AI provider.' }
+  { q: 'Do I need Ollama or LM Studio?', a: 'No. The default hybrid mode tries the configured trained local model first, then NVIDIA, Gemini, a base Ollama/LM Studio model, and finally deterministic mode. Classification, evidence, action plans and reports continue to work without an AI provider.' }
 ];
 
 export function HelpCenter({ onClose, onReplayTour }) {

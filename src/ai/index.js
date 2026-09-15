@@ -1,4 +1,5 @@
 import { env } from '../config/env.js';
+import fs from 'node:fs';
 import { OpenAICompatProvider } from './openai-compat.provider.js';
 import { HybridProvider } from './hybrid.provider.js';
 import { NoneProvider } from './none.provider.js';
@@ -13,6 +14,74 @@ function cloudConfig() {
     timeoutMs: env.NVIDIA_REQUEST_TIMEOUT_MS,
     disabled: !env.NVIDIA_API_KEY
   };
+}
+
+function trainedConfig() {
+  const deployment = readTrainedDeploymentGate();
+  const disabledReason = !env.TRAINED_MODEL_ENABLED
+    ? { status: 'CONFIG_MISSING', reason: 'Provider is not enabled' }
+    : !env.TRAINED_MODEL
+      ? { status: 'MODEL_NOT_CONFIGURED', reason: 'No trained model id is configured' }
+      : !deployment.verified
+        ? { status: deployment.status, reason: deployment.reason }
+        : null;
+  return {
+    id: 'trained',
+    baseURL: env.TRAINED_MODEL_BASE_URL,
+    apiKey: env.TRAINED_MODEL_API_KEY,
+    chatModel: env.TRAINED_MODEL,
+    // The fine-tuned chat model is deliberately not used for embeddings. The
+    // Atlas index remains 2048-dimensional and keeps its configured embedding
+    // provider independent from the chat-model fallback chain.
+    embeddingModel: '',
+    timeoutMs: env.NVIDIA_REQUEST_TIMEOUT_MS,
+    structuredOutput: env.LLM_STRUCTURED_OUTPUT,
+    disableThinking: true,
+    nativeOllama: /:\/\/(?:localhost|127\.0\.0\.1):11434(?:\/|$)/i.test(env.TRAINED_MODEL_BASE_URL),
+    ollamaKeepAlive: env.OLLAMA_KEEP_ALIVE,
+    ollamaNumCtx: env.OLLAMA_NUM_CTX,
+    ollamaNumPredict: env.OLLAMA_NUM_PREDICT,
+    disabled: Boolean(disabledReason),
+    disabledReason,
+    deployment
+  };
+}
+
+function readTrainedDeploymentGate() {
+  const manifestPath = env.TRAINED_MODEL_MANIFEST.trim();
+  if (!manifestPath) {
+    return {
+      verified: false,
+      status: 'DEPLOYMENT_MANIFEST_MISSING',
+      reason: 'A passed trained-model deployment manifest is required before activation'
+    };
+  }
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const gate = manifest?.deploymentGate;
+    if (gate?.passed !== true) {
+      return {
+        verified: false,
+        status: 'DEPLOYMENT_GATE_FAILED',
+        reason: 'The trained-model deployment gate has not passed the held-out evaluation'
+      };
+    }
+    const deploymentModelId = String(manifest?.deploymentModelId || '').trim();
+    if (deploymentModelId && env.TRAINED_MODEL && deploymentModelId !== env.TRAINED_MODEL) {
+      return {
+        verified: false,
+        status: 'MODEL_MANIFEST_MISMATCH',
+        reason: `Deployment manifest is for "${deploymentModelId}", not the configured trained model`
+      };
+    }
+    return { verified: true, status: 'DEPLOYMENT_VERIFIED', deploymentModelId: deploymentModelId || null };
+  } catch (error) {
+    return {
+      verified: false,
+      status: 'DEPLOYMENT_MANIFEST_INVALID',
+      reason: `Unable to read the trained-model deployment manifest: ${error.message?.slice(0, 160) || 'invalid manifest'}`
+    };
+  }
 }
 
 function geminiConfig() {
@@ -38,20 +107,55 @@ function lmstudioConfig() {
     baseURL: env.LMSTUDIO_BASE_URL,
     apiKey: env.LMSTUDIO_API_KEY || 'lm-studio',
     // Never assume a model id: LM Studio serves whatever model is loaded; it is configurable.
-    chatModel: env.MAIN_REASONING_MODEL || env.LMSTUDIO_MODEL || '',
+    chatModel: env.LMSTUDIO_MODEL || '',
     embeddingModel: env.EMBEDDING_MODEL || '',
     structuredOutput: env.LLM_STRUCTURED_OUTPUT
+  };
+}
+
+function ollamaConfig(model = env.OLLAMA_MODEL, id = 'ollama') {
+  return {
+    id,
+    baseURL: env.OLLAMA_BASE_URL,
+    apiKey: env.OLLAMA_API_KEY,
+    chatModel: model || '',
+    embeddingModel: '',
+    timeoutMs: env.NVIDIA_REQUEST_TIMEOUT_MS,
+    structuredOutput: env.LLM_STRUCTURED_OUTPUT,
+    disableThinking: !env.OLLAMA_THINK,
+    nativeOllama: true,
+    ollamaKeepAlive: env.OLLAMA_KEEP_ALIVE,
+    ollamaNumCtx: env.OLLAMA_NUM_CTX,
+    ollamaNumPredict: env.OLLAMA_NUM_PREDICT,
+    disabled: !model
   };
 }
 
 export function createProvider(override) {
   if (override) return new OpenAICompatProvider(override);
   if (env.LLM_PROVIDER === 'none') return new NoneProvider();
+  if (env.LLM_PROVIDER === 'trained') return new OpenAICompatProvider(trainedConfig());
+  if (env.LLM_PROVIDER === 'ollama') return new HybridProvider({
+    providers: [
+      new OpenAICompatProvider(ollamaConfig(env.OLLAMA_MODEL, 'ollama-primary')),
+      ...(env.OLLAMA_FALLBACK_MODEL && env.OLLAMA_FALLBACK_MODEL !== env.OLLAMA_MODEL
+        ? [new OpenAICompatProvider(ollamaConfig(env.OLLAMA_FALLBACK_MODEL, 'ollama-fallback'))]
+        : []),
+      new NoneProvider()
+    ]
+  });
   if (env.LLM_PROVIDER === 'gemini') return new OpenAICompatProvider(geminiConfig());
   if (env.LLM_PROVIDER === 'lmstudio') return new OpenAICompatProvider(lmstudioConfig());
   if (env.LLM_PROVIDER === 'cloud') return new OpenAICompatProvider(cloudConfig());
   return new HybridProvider({
     providers: [
+      new OpenAICompatProvider(trainedConfig()),
+      // Qwen3-8B is the default local model. The 4B model is a same-host
+      // fallback for low-memory machines or while 8B is unavailable.
+      new OpenAICompatProvider(ollamaConfig(env.OLLAMA_MODEL, 'ollama-primary')),
+      ...(env.OLLAMA_FALLBACK_MODEL && env.OLLAMA_FALLBACK_MODEL !== env.OLLAMA_MODEL
+        ? [new OpenAICompatProvider(ollamaConfig(env.OLLAMA_FALLBACK_MODEL, 'ollama-fallback'))]
+        : []),
       new OpenAICompatProvider(cloudConfig()),
       new OpenAICompatProvider(geminiConfig()),
       new OpenAICompatProvider(lmstudioConfig()),
@@ -67,7 +171,8 @@ export function getProvider() {
 }
 
 export function getProviderForTask(task = 'reasoning') {
-  // Task-level routing hook: CLASSIFICATION_MODEL / MAIN_REASONING_MODEL may differ.
+  // Task-level routing hook: CLASSIFICATION_MODEL may override the cloud leg
+  // while the trained model remains the default primary provider.
   const provider = getProvider();
   const roleModel = task === 'classification' ? (env.CLASSIFICATION_MODEL || '').trim() : '';
   if (roleModel && provider.chatModel !== roleModel) {

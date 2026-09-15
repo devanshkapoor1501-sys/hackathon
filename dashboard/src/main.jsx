@@ -28,6 +28,11 @@ const NAV_PLATFORM = [
   ['Legal Sources', BookOpen], ['Evaluation', ClipboardCheck], ['System', TerminalSquare], ['Settings', Settings]
 ];
 
+// Page labels are user-facing strings, so keep route tokens separate from
+// labels that contain path characters such as "Activity / Timeline".
+const PAGE_ROUTE_KEYS = { 'Activity / Timeline': 'activity-timeline' };
+const PAGE_BY_ROUTE_KEY = Object.fromEntries(Object.entries(PAGE_ROUTE_KEYS).map(([label, key]) => [key, label]));
+
 const ROLE_META = {
   applicant: { label: 'Applicant / Innovator', compact: 'Applicant', eyebrow: 'INNOVATOR WORKSPACE' },
   professional: { label: 'IP Professional', compact: 'Professional', eyebrow: 'PROFESSIONAL REVIEW DESK' },
@@ -145,7 +150,7 @@ export function Landing({ onAuth }) {
           ['Classification-first', 'Product category is resolved before any regulatory question is answered.'],
           ['Source-aware', 'Authority levels, effective dates and superseded versions are tracked.'],
           ['Human-review ready', 'Uncertainty is escalated with context, not hidden behind confidence scores.'],
-          ['AI optional', 'Cloud AI, LM Studio or deterministic mode — nothing is fabricated when offline.']].map(([t, d]) =>
+          ['AI optional', 'Trained local AI, cloud fallback or deterministic mode — nothing is fabricated when offline.']].map(([t, d]) =>
           <article key={t} className="why-card"><ShieldCheck size={18}/><h3>{t}</h3><p>{d}</p></article>)}
       </div>
     </section>
@@ -509,7 +514,8 @@ function App() {
   const isPublic = !(route.startsWith('app') || isCaseRoute);
   const [accessToken, setAccessToken] = useState(''), [user, setUser] = useState(null), [org, setOrg] = useState(null), [membership, setMembership] = useState(null), [booting, setBooting] = useState(true), [bootMode, setBootMode] = useState('restoring'), [bootError, setBootError] = useState('');
   const api = useMemo(() => new Api(accessToken, setAccessToken), [accessToken]);
-  const page = route.split('/')[1] || 'Dashboard';
+  const pageRouteKey = route.split('/')[1] || 'Dashboard';
+  const page = PAGE_BY_ROUTE_KEY[pageRouteKey] || pageRouteKey;
 
   // Case deep-link: #/case/<id>
   let viewCaseId = null;
@@ -569,7 +575,7 @@ function App() {
     }
   }, [booting, user, org]);
   function replayTour() { setHelpOpen(false); setTour(true); }
-  const setPage = p => { location.hash = `#/app/${p}`; setSelectedCaseId(null); };
+  const setPage = p => { location.hash = `#/app/${PAGE_ROUTE_KEYS[p] || p}`; setSelectedCaseId(null); };
   const allowedPages = new Set(roleNavigation(user?.accountRole).flatMap(([, items]) => items.map(([label]) => label)));
   useEffect(() => {
     if (!booting && user && org && route.startsWith('app/') && !allowedPages.has(page)) setPage('Dashboard');
@@ -581,7 +587,18 @@ function App() {
     try { const demo = await api.request(`/api/organizations/${org._id}/sahayak/demo`, { method: 'POST' }); setSelectedCaseId(demo._id); location.hash = `#/case/${demo._id}`; } catch { /* show error inside the overlay */ }
   }
 
-  async function startSession(session) { setBootMode('starting'); setBooting(true); try { setAccessToken(session.accessToken); setUser(session.user); await loadSession(session.accessToken); location.hash = '#/app/Dashboard'; } catch (e) { setBootError(e.message); } finally { setBooting(false); } }
+  async function startSession(session) {
+    setBootMode('starting'); setBooting(true);
+    try {
+      // Clear a previous role's case deep-link before loading the new
+      // organization; otherwise the new session can briefly request a case
+      // belonging to the account that just signed out.
+      location.hash = '#/app/Dashboard';
+      setSelectedCaseId(null);
+      setAccessToken(session.accessToken); setUser(session.user);
+      await loadSession(session.accessToken);
+    } catch (e) { setBootError(e.message); } finally { setBooting(false); }
+  }
 
   if (booting && isPublic) return <LoadingWorkspace mode={bootMode}/>;
   if (isPublic && route.startsWith('how')) return <HowItWorks onBack={() => { location.hash = ''; }} />;

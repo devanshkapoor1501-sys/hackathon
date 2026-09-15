@@ -106,7 +106,7 @@ export function chunkLegalDocument(rawText) {
  * Returns { source fields ready for LegalSource, chunks ready for LegalChunk }.
  * Persistence is handled by the caller/route so this stays pure and testable.
  */
-export function buildIngestPayload({ title, authority, documentType, regimes, status, sourceLevel, effectiveFrom, effectiveTo, url, notes, language = 'en', jurisdiction = 'IN' }) {
+export function buildIngestPayload({ title, authority, documentType, regimes, status, sourceLevel, effectiveFrom, effectiveTo, url, notes, language = 'en', jurisdiction = 'IN', trainingEligibility = 'RETRIEVAL_ONLY', attribution = '' }) {
   const errors = [];
   if (!title || String(title).trim().length < 4) errors.push('Title is required (min 4 chars)');
   if (!authority || !String(authority).trim()) errors.push('Authority is required (e.g., "Parliament of India")');
@@ -118,6 +118,7 @@ export function buildIngestPayload({ title, authority, documentType, regimes, st
   if (!allowedStatuses.includes(status)) errors.push(`status must be one of ${allowedStatuses.join(', ')}`);
   if (status === 'CURRENT' && !effectiveFrom) errors.push('CURRENT documents require effectiveFrom');
   if (!['IN', 'INTL'].includes(String(jurisdiction).toUpperCase())) errors.push('jurisdiction must be IN or INTL');
+  if (!['RETRIEVAL_ONLY', 'TRAINING_ELIGIBLE', 'EXCLUDED'].includes(String(trainingEligibility).toUpperCase())) errors.push('trainingEligibility must be RETRIEVAL_ONLY, TRAINING_ELIGIBLE or EXCLUDED');
   if (errors.length) return { ok: false, errors };
 
   const regimeList = String(regimes || '').split(',').map(r => r.trim().toUpperCase()).filter(Boolean);
@@ -139,6 +140,9 @@ export function buildIngestPayload({ title, authority, documentType, regimes, st
       language,
       sourceLevel: level,
       lastVerifiedAt: new Date().toISOString().slice(0, 10),
+      trainingEligibility: String(trainingEligibility).toUpperCase(),
+      ingestionStatus: 'UPLOADED_DOCUMENT',
+      attribution: attribution ? String(attribution).slice(0, 500) : String(authority).trim(),
       relations: [],
       notes: notes ? String(notes).slice(0, 1000) : 'Ingested via admin corpus panel.'
     }

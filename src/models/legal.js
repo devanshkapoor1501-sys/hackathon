@@ -5,6 +5,7 @@ const timestamps = { timestamps: true, versionKey: false };
 const named = (name, schema) => models[name] || model(name, schema);
 
 export const SOURCE_STATUSES = ['CURRENT', 'HISTORICAL', 'SUPERSEDED', 'DRAFT', 'PROPOSED', 'UNKNOWN'];
+export const TRAINING_ELIGIBILITY = ['RETRIEVAL_ONLY', 'TRAINING_ELIGIBLE', 'EXCLUDED'];
 export const REGIMES = [
   'AYUSH', 'FOOD', 'COSMETIC', 'PATENT', 'TRADEMARK', 'GI', 'DESIGN', 'COPYRIGHT', 'PLANT_VARIETY',
   'BIODIVERSITY_ABS', 'TRADITIONAL_KNOWLEDGE', 'LABELLING_CLAIMS',
@@ -205,6 +206,9 @@ const legalSourceSchema = new Schema({
   language: { type: String, default: 'en' },
   sourceLevel: { type: Number, min: 1, max: 7, required: true },
   lastVerifiedAt: String,
+  trainingEligibility: { type: String, enum: TRAINING_ELIGIBILITY, default: 'RETRIEVAL_ONLY' },
+  ingestionStatus: { type: String, enum: ['SEEDED_SUMMARY', 'CATALOG_ONLY', 'UPLOADED_DOCUMENT'], default: 'SEEDED_SUMMARY' },
+  attribution: { type: String, default: '' },
   relations: [{ relationType: String, targetKey: String, note: String }],
   notes: String
 }, timestamps);
@@ -226,7 +230,9 @@ const legalChunkSchema = new Schema({
     version: String,
     regimes: [String],
     jurisdiction: { type: String, default: 'IN' },
-    containsInstructionPatterns: Boolean
+    containsInstructionPatterns: Boolean,
+    trainingEligibility: { type: String, enum: TRAINING_ELIGIBILITY, default: 'RETRIEVAL_ONLY' },
+    ingestionStatus: String
   }
 }, timestamps);
 legalChunkSchema.index({ sourceKey: 1, chunkIndex: 1 }, { unique: true });
@@ -235,6 +241,25 @@ legalChunkSchema.index({ 'metadata.status': 1 });
 export const LegalSource = named('LegalSource', legalSourceSchema);
 export const LegalChunk = named('LegalChunk', legalChunkSchema);
 export const CaseWorkspace = named('CaseWorkspace', caseSchema);
+
+// Explicit human corrections are the only live product signal eligible for
+// future fine-tuning. Raw conversations are never promoted automatically.
+const selfTrainingFeedbackSchema = new Schema({
+  organizationId: { type: Schema.Types.ObjectId, required: true, index: true },
+  caseId: { type: Schema.Types.ObjectId, ref: 'CaseWorkspace', required: true, index: true },
+  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  reviewedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  task: { type: String, enum: ['intake', 'assistant', 'assessment_summary'], required: true },
+  rating: { type: String, enum: ['CORRECT', 'NEEDS_CORRECTION', 'UNSUPPORTED'], required: true },
+  status: { type: String, enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED'], default: 'PENDING_REVIEW', index: true },
+  question: { type: String, default: '', maxlength: 2000 },
+  correctionNotes: { type: String, default: '', maxlength: 4000 },
+  sourceRefs: { type: [String], default: [] },
+  example: { type: Schema.Types.Mixed, required: true },
+  reviewedAt: Date
+}, timestamps);
+selfTrainingFeedbackSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
+export const SelfTrainingFeedback = named('SelfTrainingFeedback', selfTrainingFeedbackSchema);
 
 const evaluationRunSchema = new Schema({
   organizationId: { type: Schema.Types.ObjectId, required: true, index: true },

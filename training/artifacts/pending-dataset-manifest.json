@@ -1,0 +1,9 @@
+{
+  "datasetVersion": "1.0",
+  "status": "PENDING_HUMAN_REVIEW",
+  "examples": 12,
+  "output": "training/review/pending.jsonl",
+  "sourceManifestHash": "a5fdeac3885d38a1a14531b714c8e6580f068d1b90fe14bec8eab34e73329f9e",
+  "approvedInput": "training/review/approved.jsonl",
+  "generatedAt": "2026-09-15T10:06:29.376Z"
+}

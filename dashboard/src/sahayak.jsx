@@ -5,7 +5,7 @@ import {
   Sparkles, TerminalSquare, Trash2, Upload, X, ExternalLink
 } from 'lucide-react';
 import { RecoveryHint, InlineLlmBanner, EmptyRecovery } from './recovery.jsx';
-import { ClaimsReviewCard, CompliancePassportCard, MarketRoutesCard, FilingPackCard, ChangeAlertsCard, SafetyPostMarketCard, ReviewWorkflowCard, WhatIfCard } from './advanced.jsx';
+import { ClaimsReviewCard, CompliancePassportCard, MarketRoutesCard, FilingPackCard, ChangeAlertsCard, SafetyPostMarketCard, ReviewWorkflowCard, ModelFeedbackCard, WhatIfCard } from './advanced.jsx';
 
 // KnowledgeGraphCard is the heaviest single sub-component in the case
 // workspace. Lazy-load it so the route's initial JS is lighter.
@@ -222,10 +222,14 @@ export function CaseWorkspaceView({ api, org, caseId, onBack }) {
     catch { setSummaryError('Copy is unavailable in this browser.'); }
   }
 
-  if (!kase) return <section className="card">{error ? error : <><Spinner/> Loading case…</>}</section>;
+  if (!kase) return <section className="card">{error ? (error.message || String(error)) : <><Spinner/> Loading case…</>}</section>;
   const openQuestions = (kase.questions || []).filter(q => !q.answered);
   const facts = kase.facts || {};
-  const isStale = Boolean(assessment && kase.updatedAt && new Date(kase.updatedAt) > new Date(assessment.createdAt || 0));
+  // Case saves also update `updatedAt` when an assessment itself is persisted,
+  // so comparing that timestamp with assessment.createdAt marks every fresh
+  // assessment stale. Intake edits deliberately move the case back to one of
+  // these pre-assessment statuses; use that authoritative state transition.
+  const isStale = Boolean(assessment && ['intake', 'clarifying', 'classified'].includes(kase.status));
 
   async function exportReport() {
     setBusy(true); setError(null);
@@ -345,6 +349,7 @@ export function CaseWorkspaceView({ api, org, caseId, onBack }) {
         <UnknownsAssumptions unknowns={assessment.unknowns} assumptions={assessment.assumptions}/>
         <HumanReviewCard review={assessment.humanReview}/>
         <ReviewWorkflowCard api={api} org={org} kase={kase} assessment={assessment}/>
+        <ModelFeedbackCard api={api} org={org} kase={kase}/>
         <AssistantPanel api={api} org={org} kase={kase} onRefresh={load}/>
         <MetaStrip assessment={assessment}/>
       </>}
@@ -889,7 +894,7 @@ export function LegalSourcesPage({ api }) {
     {!sources && <section className="card"><Spinner/></section>}
     <div className="card kb-table">
       <div className="table-head"><span>Document</span><span>Jurisdiction</span><span>Authority</span><span>Lvl</span><span>Status</span><span>Effective</span><span>Chunks</span><span>Last verified</span></div>
-      {filtered.map(s => <>
+      {filtered.map(s => <React.Fragment key={s.sourceKey}>
         <div key={s.sourceKey} className={`table-row clickable ${openSource === s.sourceKey ? 'active-row' : ''}`} onClick={() => open(s.sourceKey)}>
           <span className="source-name"><BookOpen/><span><strong>{s.title}</strong><small>{s.sourceKey}</small></span></span>
           <span><span className={`badge ${(s.jurisdiction || 'IN') === 'INTL' ? 'sev-yellow' : 'sev-green'}`}>{s.jurisdiction || 'IN'}</span></span><span>{s.authority}</span><span>{s.sourceLevel}</span>
@@ -907,7 +912,7 @@ export function LegalSourcesPage({ api }) {
             </blockquote>)}
           </>}
         </div>}
-      </>)}
+      </React.Fragment>)}
     </div>
   </>;
 }
@@ -999,6 +1004,17 @@ export function DevPanelPage({ api }) {
       <Metric label="LLM connection" value={llm.connectivity} sub={llm.latencyMs != null ? `${llm.latencyMs} ms` : llm.note}/>
       <Metric label="Retrieval" value="READY" sub={retrieval.mode}/>
     </div>
+    <section className="card">
+      <h3 className="card-h"><Activity size={15}/> Provider chain</h3>
+      <div className="status-badges">
+        {(llm.providerAttempts || []).map((attempt, index) =>
+          <span key={`${attempt.provider}-${index}`} className={`chip static ${attempt.connected ? 'on' : ''}`}>
+            {index + 1}. {attempt.provider} · {attempt.model || 'not configured'} · {attempt.status || 'unknown'}
+          </span>
+        )}
+      </div>
+      <p className="small muted">The trained local model is attempted first, followed by NVIDIA, Gemini, Ollama/LM Studio, and deterministic mode. Embeddings remain on the configured embedding provider.</p>
+    </section>
     <CorpusHealthCard kb={kb}/>
     <CorpusIngestPanel api={api}/>
     <KnowledgeBaseStatsCard kb={kb}/>
@@ -1047,7 +1063,8 @@ function CorpusIngestPanel({ api }) {
         title: fd.get('title'), authority: fd.get('authority'), documentType: fd.get('documentType'),
         regimes: fd.get('regimes'), status: fd.get('status'), sourceLevel: fd.get('sourceLevel'),
         effectiveFrom: fd.get('effectiveFrom') || null, effectiveTo: fd.get('effectiveTo') || null,
-        url: fd.get('url'), notes: fd.get('notes'), jurisdiction: fd.get('jurisdiction')
+        url: fd.get('url'), notes: fd.get('notes'), jurisdiction: fd.get('jurisdiction'),
+        trainingEligibility: fd.get('trainingEligibility'), attribution: fd.get('attribution')
       };
       let response;
       if (mode === 'file') {
@@ -1080,11 +1097,13 @@ function CorpusIngestPanel({ api }) {
       <label>Type<select name="documentType" defaultValue="notification">{['act','rules','regulation','notification','gazette','treaty','guidance'].map(x => <option key={x} value={x}>{x}</option>)}</select></label>
       <label>Jurisdiction<select name="jurisdiction" defaultValue="IN"><option value="IN">IN · India</option><option value="INTL">INTL · International</option></select></label>
       <label>Status<select name="status" defaultValue="CURRENT">{['CURRENT','HISTORICAL','DRAFT','UNKNOWN'].map(x => <option key={x} value={x}>{x}</option>)}</select></label>
+      <label>Use policy<select name="trainingEligibility" defaultValue="RETRIEVAL_ONLY"><option value="RETRIEVAL_ONLY">Retrieval only</option><option value="TRAINING_ELIGIBLE">Training eligible</option><option value="EXCLUDED">Excluded</option></select></label>
       <label>Authority level (1–7)<input name="sourceLevel" type="number" min="1" max="7" defaultValue="1" required/></label>
       <label>Regimes (comma-separated)<input name="regimes" placeholder="AYUSH, FOOD"/></label>
       <label>Effective from{false && '*'}<input name="effectiveFrom" type="date"/></label>
       <label>Effective until<input name="effectiveTo" type="date"/></label>
       <label className="ingest-wide">Official URL<input name="url" type="url" placeholder="https://egazette.gov.in/..."/></label>
+      <label className="ingest-wide">Attribution / rights note<input name="attribution" placeholder="Original authority and permitted-use note"/></label>
       {mode === 'text'
         ? <label className="ingest-wide">Document text<textarea name="text" rows="8" required minLength="40" placeholder={'CHAPTER II\n\nSECTION 4: No person shall...'} /></label>
         : <label className="ingest-wide">File<input name="file" type="file" accept=".pdf,.txt,.docx" required/></label>}
@@ -1120,8 +1139,8 @@ function KnowledgeBaseStatsCard({ kb }) {
 function ConfigCard({ llm }) {
   return <section className="card">
     <h3 className="card-h"><History size={15}/> Configuration</h3>
-    <pre className="config-pre">{`LLM_PROVIDER=${llm.provider}\n# hybrid: cloud → LM Studio → deterministic\nNVIDIA_API_KEY=<optional cloud key>\nLMSTUDIO_BASE_URL=${llm.baseURL || 'http://localhost:1234/v1'}\nLMSTUDIO_MODEL=<optional loaded model id>\nMAIN_REASONING_MODEL=<optional model id>\nEMBEDDING_MODEL=<optional embedding model or blank>`}</pre>
-    <p className="small muted">Hybrid mode uses cloud AI first, then optional LM Studio, then deterministic mode. Switch providers via environment variables and restart the backend. The browser never talks directly to either AI endpoint.</p>
+    <pre className="config-pre">{`LLM_PROVIDER=${llm.provider}\n# hybrid: trained Ollama → NVIDIA → Gemini → Ollama/LM Studio → deterministic\nTRAINED_MODEL_ENABLED=<true|false>\nTRAINED_MODEL=<loaded fine-tuned model id>\nOLLAMA_BASE_URL=http://localhost:11434/v1\nOLLAMA_MODEL=<loaded base fallback model id>\nNVIDIA_API_KEY=<optional cloud key>\nEMBEDDING_MODEL=<optional embedding model or blank>`}</pre>
+    <p className="small muted">Hybrid mode uses the trained local model first, then cloud providers, then a base local model, and finally deterministic mode. Switch providers via environment variables and restart the backend. The browser never talks directly to any AI endpoint.</p>
   </section>;
 }
 

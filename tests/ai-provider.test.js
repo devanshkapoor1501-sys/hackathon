@@ -31,15 +31,32 @@ class FakeProvider extends AIProvider {
 }
 
 describe('AI provider fallback chain', () => {
-  it('uses cloud before local and deterministic providers', async () => {
+  it('uses the trained local model before cloud and fallback providers', async () => {
+    const trained = new FakeProvider('trained');
     const cloud = new FakeProvider('nvidia');
     const local = new FakeProvider('lmstudio');
     const none = new NoneProvider();
-    const provider = new HybridProvider({ providers: [cloud, local, none] });
+    const provider = new HybridProvider({ providers: [trained, cloud, local, none] });
 
+    trained.failures.generateStructured = true;
     await expect(provider.generateStructured({})).resolves.toEqual({ data: { provider: 'nvidia' } });
+    expect(trained.calls).toContain('generateStructured');
     expect(cloud.calls).toContain('generateStructured');
     expect(local.calls).toEqual([]);
+  });
+
+  it('follows trained -> NVIDIA -> Gemini -> Ollama -> deterministic order', async () => {
+    const trained = new FakeProvider('trained', { failures: { generate: true } });
+    const nvidia = new FakeProvider('nvidia', { failures: { generate: true } });
+    const gemini = new FakeProvider('gemini', { failures: { generate: true } });
+    const ollama = new FakeProvider('ollama');
+    const provider = new HybridProvider({ providers: [trained, nvidia, gemini, ollama, new NoneProvider()] });
+
+    await expect(provider.generate({})).resolves.toEqual({ text: 'ollama' });
+    expect(trained.calls).toEqual(['generate']);
+    expect(nvidia.calls).toEqual(['generate']);
+    expect(gemini.calls).toEqual(['generate']);
+    expect(ollama.calls).toEqual(['generate']);
   });
 
   it('exposes the configured fallback model to capability checks', () => {
@@ -62,6 +79,18 @@ describe('AI provider fallback chain', () => {
     const parts = [];
     for await (const part of provider.stream({})) parts.push(part.text);
     expect(parts).toEqual(['lmstudio']);
+  });
+
+  it('keeps embeddings on the configured embedding provider when chat primary has none', async () => {
+    const trained = new FakeProvider('trained');
+    trained.embeddingModel = '';
+    const nvidia = new FakeProvider('nvidia');
+    const provider = new HybridProvider({ providers: [trained, nvidia, new NoneProvider()] });
+
+    await expect(provider.embed(['text'])).resolves.toEqual([[1, 2, 3]]);
+    expect(trained.calls).toEqual([]);
+    expect(nvidia.calls).toContain('embed');
+    expect(provider.embeddingModel).toBe('nvidia-embedding');
   });
 
   it('uses the opt-in Gemini leg before LM Studio when NVIDIA is unavailable', async () => {
@@ -114,5 +143,18 @@ describe('AI provider fallback chain', () => {
       id: 'nvidia', baseURL: 'https://example.invalid/v1', apiKey: '', chatModel: 'model', disabled: true
     });
     await expect(provider.healthCheck()).resolves.toMatchObject({ connected: false, status: 'CONFIG_MISSING', latencyMs: 0 });
+  });
+
+  it('does not probe a trained model when deployment evaluation has not passed', async () => {
+    const provider = new OpenAICompatProvider({
+      id: 'trained', baseURL: 'http://127.0.0.1:9/v1', apiKey: 'ollama', chatModel: 'ip-sakti-qwen3-8b',
+      disabled: true,
+      disabledReason: { status: 'DEPLOYMENT_GATE_FAILED', reason: 'held-out evaluation is pending' },
+      deployment: { verified: false, status: 'DEPLOYMENT_GATE_FAILED' }
+    });
+    await expect(provider.healthCheck()).resolves.toMatchObject({
+      connected: false, status: 'DEPLOYMENT_GATE_FAILED', latencyMs: 0,
+      reason: 'held-out evaluation is pending'
+    });
   });
 });

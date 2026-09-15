@@ -4,6 +4,7 @@ import { getProvider } from '../src/ai/index.js';
 import { detectInjection } from '../src/retrieval/legal-retrieval.service.js';
 import { logger } from '../src/config/logger.js';
 import { INTERNATIONAL_CORPUS } from '../src/rules/international.js';
+import { SUPPLEMENTAL_SOURCE_CATALOG, catalogEntryAsPointer } from '../src/data/source-manifest.js';
 
 // Authoritative, jurisdiction-tagged corpus. Texts are concise paraphrased summaries
 // for prototype retrieval — every record carries its official URL and lastVerifiedAt;
@@ -359,7 +360,15 @@ export const INDIA_CORPUS = [
   }
 ];
 
-export const CORPUS = [...INDIA_CORPUS, ...INTERNATIONAL_CORPUS];
+// Catalog-only official pointers make the requested WIPO legal systems and
+// country-law discovery paths visible to retrieval without reproducing a
+// restricted or unlicensed document. Exact legal text can be added later via
+// the authenticated corpus-ingestion path after its rights are recorded.
+export const CORPUS = [
+  ...INDIA_CORPUS,
+  ...INTERNATIONAL_CORPUS,
+  ...SUPPLEMENTAL_SOURCE_CATALOG.map(catalogEntryAsPointer)
+];
 
 async function embedChunks(provider, chunks) {
   try {
@@ -384,7 +393,7 @@ async function main({ wipe = true } = {}) {
     if (!wipe && exists) continue;
     await LegalSource.deleteOne({ sourceKey: entry.sourceKey });
     await LegalChunk.deleteMany({ sourceKey: entry.sourceKey });
-    await LegalSource.create({ ...sourceFields });
+    await LegalSource.create({ ...sourceFields, trainingEligibility: entry.trainingEligibility || (entry.documentType === 'test' ? 'EXCLUDED' : 'TRAINING_ELIGIBLE'), ingestionStatus: entry.ingestionStatus || 'SEEDED_SUMMARY' });
     const embeddings = await embedChunks(provider, chunks);
     await LegalChunk.insertMany(chunks.map((chunk, index) => ({
       sourceKey: entry.sourceKey, text: chunk.text, sectionLabel: chunk.sectionLabel || '',
@@ -393,7 +402,9 @@ async function main({ wipe = true } = {}) {
         authority: entry.authority, documentType: entry.documentType, sourceLevel: entry.sourceLevel,
         status: entry.status, effectiveFrom: entry.effectiveFrom || null, effectiveTo: entry.effectiveTo || null,
         version: entry.version, regimes: entry.regimes, jurisdiction: entry.jurisdiction || 'IN',
-        containsInstructionPatterns: detectInjection(chunk.text)
+        containsInstructionPatterns: detectInjection(chunk.text),
+        trainingEligibility: entry.trainingEligibility || (entry.documentType === 'test' ? 'EXCLUDED' : 'TRAINING_ELIGIBLE'),
+        ingestionStatus: entry.ingestionStatus || 'SEEDED_SUMMARY'
       }
     })));
     seeded++; chunksSeeded += chunks.length;
