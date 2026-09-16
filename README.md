@@ -18,6 +18,58 @@ Jurisdiction-aware prototype built for Smart India Hackathon Problem Statement *
 - Git.
 - AI credentials are optional. The application works in deterministic/offline mode when no provider is configured.
 
+### Copy-paste setup for a new Windows laptop
+
+Install Node.js 22+, Git, and Docker Desktop first. Then open PowerShell and
+run the following commands from top to bottom:
+
+```powershell
+git clone https://github.com/devanshkapoor1501-sys/hackathon.git
+cd hackathon
+npm ci
+npm --prefix dashboard ci
+Copy-Item .env.example .env
+docker compose up -d
+npm run seed:legal
+npm run seed:demo
+```
+
+The default `.env.example` uses `LLM_PROVIDER=hybrid`. No NVIDIA key, Gemini
+key, Ollama installation, or LM Studio installation is required: if no AI
+provider is available, the application uses deterministic classification,
+retrieval, citations, action plans, and report generation.
+
+Start the servers in two separate PowerShell windows:
+
+```powershell
+# Window 1 — backend API
+cd hackathon
+npm run dev
+```
+
+```powershell
+# Window 2 — dashboard
+cd hackathon
+npm run dashboard:dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). Confirm the services are
+running with:
+
+```powershell
+Invoke-WebRequest http://localhost:3000/ready
+Invoke-RestMethod http://localhost:3000/health/llm
+```
+
+For macOS or Linux, replace `Copy-Item .env.example .env` with
+`cp .env.example .env`; the remaining commands are the same.
+
+To stop the application, press `Ctrl+C` in both server windows and run:
+
+```powershell
+docker compose down
+```
+
 ### 1. Clone and install dependencies
 
 ```powershell
