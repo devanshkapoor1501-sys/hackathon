@@ -21,11 +21,13 @@ const schema = z.object({
   NVIDIA_CHAT_MODEL: z.string().default('meta/llama-3.1-8b-instruct'),
   NVIDIA_EMBEDDING_MODEL: z.string().default('nvidia/llama-nemotron-embed-1b-v2'),
   NVIDIA_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
-  TRAINED_MODEL_ENABLED: z.preprocess(value => value === true || value === 'true', z.boolean()).default(false),
+  // Keep the trained Qwen leg configured by default. It remains inactive until
+  // its Ollama model and a passed deployment manifest are both available.
+  TRAINED_MODEL_ENABLED: z.preprocess(value => value === true || value === 'true', z.boolean()).default(true),
   TRAINED_MODEL_BASE_URL: z.string().url().default('http://localhost:11434/v1'),
   TRAINED_MODEL_API_KEY: z.string().default('ollama'),
-  TRAINED_MODEL: z.string().default(''),
-  TRAINED_MODEL_MANIFEST: z.string().default(''),
+  TRAINED_MODEL: z.string().default('ip-sakti-qwen3-8b'),
+  TRAINED_MODEL_MANIFEST: z.string().default('training/artifacts/ip-sakti-qwen3-8b-merged/deployment-manifest.json'),
   GEMINI_API_KEY: z.string().default(''),
   GEMINI_BASE_URL: z.string().url().default('https://generativelanguage.googleapis.com/v1beta/openai/'),
   GEMINI_CHAT_MODEL: z.string().default('gemini-3.6-flash'),

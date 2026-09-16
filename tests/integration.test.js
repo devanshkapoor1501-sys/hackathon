@@ -56,6 +56,9 @@ describe('integration: structured error contract over the real Fastify app', () 
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body).toHaveProperty('connectivity');
+    expect(body).toHaveProperty('trainedModel');
+    expect(body).toHaveProperty('trainedDeployment');
+    expect(body).toHaveProperty('trainedDeploymentStatus');
     expect(['CONNECTED', 'OFFLINE']).toContain(body.connectivity);
   });
 

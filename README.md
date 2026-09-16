@@ -172,7 +172,7 @@ NVIDIA_API_KEY=your-nvidia-key
 GEMINI_API_KEY=your-google-ai-studio-key
 ```
 
-The provider order is `trained Qwen → NVIDIA → Gemini → Ollama Qwen3-8B → Ollama Qwen3-4B → deterministic mode`. The trained leg is enabled only when `TRAINED_MODEL_ENABLED=true`, `TRAINED_MODEL` names a loaded model, and `TRAINED_MODEL_MANIFEST` points to a deployment manifest whose `deploymentGate.passed` is `true`. Gemini is attempted only when `GEMINI_API_KEY` is present; the application does not make a Gemini request when the key is empty. LM Studio remains available through its explicit `LLM_PROVIDER=lmstudio` mode but is not part of the default chain.
+The provider order is `trained Qwen → NVIDIA → Gemini → Ollama Qwen3-8B → Ollama Qwen3-4B → deterministic mode`. The trained leg is configured by default, but it is enabled only when `TRAINED_MODEL` names a loaded model and `TRAINED_MODEL_MANIFEST` points to a deployment manifest whose `deploymentGate.passed` is `true`. Gemini is attempted only when `GEMINI_API_KEY` is present; the application does not make a Gemini request when the key is empty. Explicit `LLM_PROVIDER=trained` uses this same safe fallback chain. LM Studio remains available through its explicit `LLM_PROVIDER=lmstudio` mode but is not part of the default chain.
 
 The assistant remains RAG-based: deterministic classification and retrieval select verified, jurisdiction-scoped evidence first, and Qwen only synthesizes from that evidence. Retrieved documents are treated as data, not instructions; the deterministic engines and citation verifier remain authoritative.
 

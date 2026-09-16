@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { OpenAICompatProvider } from './openai-compat.provider.js';
 import { HybridProvider } from './hybrid.provider.js';
 import { NoneProvider } from './none.provider.js';
+import path from 'node:path';
 
 function cloudConfig() {
   return {
@@ -48,22 +49,33 @@ function trainedConfig() {
 }
 
 function readTrainedDeploymentGate() {
-  const manifestPath = env.TRAINED_MODEL_MANIFEST.trim();
+  const configuredPath = env.TRAINED_MODEL_MANIFEST.trim();
+  const manifestPath = configuredPath ? path.resolve(process.cwd(), configuredPath) : '';
   if (!manifestPath) {
     return {
       verified: false,
       status: 'DEPLOYMENT_MANIFEST_MISSING',
-      reason: 'A passed trained-model deployment manifest is required before activation'
+      reason: 'A passed trained-model deployment manifest is required before activation',
+      manifestPath: null
     };
   }
   try {
+    if (!fs.existsSync(manifestPath)) {
+      return {
+        verified: false,
+        status: 'DEPLOYMENT_MANIFEST_MISSING',
+        reason: `Deployment manifest was not found at ${manifestPath}`,
+        manifestPath
+      };
+    }
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     const gate = manifest?.deploymentGate;
     if (gate?.passed !== true) {
       return {
         verified: false,
         status: 'DEPLOYMENT_GATE_FAILED',
-        reason: 'The trained-model deployment gate has not passed the held-out evaluation'
+        reason: gate?.reason || 'The trained-model deployment gate has not passed the held-out evaluation',
+        manifestPath
       };
     }
     const deploymentModelId = String(manifest?.deploymentModelId || '').trim();
@@ -71,15 +83,17 @@ function readTrainedDeploymentGate() {
       return {
         verified: false,
         status: 'MODEL_MANIFEST_MISMATCH',
-        reason: `Deployment manifest is for "${deploymentModelId}", not the configured trained model`
+        reason: `Deployment manifest is for "${deploymentModelId}", not the configured trained model`,
+        manifestPath
       };
     }
-    return { verified: true, status: 'DEPLOYMENT_VERIFIED', deploymentModelId: deploymentModelId || null };
+    return { verified: true, status: 'DEPLOYMENT_VERIFIED', deploymentModelId: deploymentModelId || null, manifestPath };
   } catch (error) {
     return {
       verified: false,
       status: 'DEPLOYMENT_MANIFEST_INVALID',
-      reason: `Unable to read the trained-model deployment manifest: ${error.message?.slice(0, 160) || 'invalid manifest'}`
+      reason: `Unable to read the trained-model deployment manifest: ${error.message?.slice(0, 160) || 'invalid manifest'}`,
+      manifestPath
     };
   }
 }
@@ -134,7 +148,7 @@ function ollamaConfig(model = env.OLLAMA_MODEL, id = 'ollama') {
 export function createProvider(override) {
   if (override) return new OpenAICompatProvider(override);
   if (env.LLM_PROVIDER === 'none') return new NoneProvider();
-  if (env.LLM_PROVIDER === 'trained') return new OpenAICompatProvider(trainedConfig());
+  if (env.LLM_PROVIDER === 'trained') return new HybridProvider(buildQwenFirstChain());
   if (env.LLM_PROVIDER === 'ollama') return new HybridProvider({
     providers: [
       new OpenAICompatProvider(ollamaConfig(env.OLLAMA_MODEL, 'ollama-primary')),
@@ -147,10 +161,16 @@ export function createProvider(override) {
   if (env.LLM_PROVIDER === 'gemini') return new OpenAICompatProvider(geminiConfig());
   if (env.LLM_PROVIDER === 'lmstudio') return new OpenAICompatProvider(lmstudioConfig());
   if (env.LLM_PROVIDER === 'cloud') return new OpenAICompatProvider(cloudConfig());
-  return new HybridProvider({
+  return new HybridProvider(buildQwenFirstChain());
+}
+
+function buildQwenFirstChain() {
+  return {
     providers: [
       new OpenAICompatProvider(trainedConfig()),
-      // Required production order: trained Qwen -> NVIDIA -> Gemini -> Ollama.
+      // Keep the trained Qwen model first. The remaining providers are ordered
+      // from the preferred cloud legs to the base local Qwen fallbacks, then a
+      // deterministic provider that never fabricates an AI explanation.
       new OpenAICompatProvider(cloudConfig()),
       new OpenAICompatProvider(geminiConfig()),
       new OpenAICompatProvider(ollamaConfig(env.OLLAMA_MODEL, 'ollama-primary')),
@@ -159,7 +179,7 @@ export function createProvider(override) {
         : []),
       new NoneProvider()
     ]
-  });
+  };
 }
 
 let cached = null;

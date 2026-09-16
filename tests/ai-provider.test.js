@@ -3,6 +3,7 @@ import { AIProvider } from '../src/ai/provider.js';
 import { HybridProvider } from '../src/ai/hybrid.provider.js';
 import { NoneProvider } from '../src/ai/none.provider.js';
 import { OpenAICompatProvider } from '../src/ai/openai-compat.provider.js';
+import { createProvider } from '../src/ai/index.js';
 
 class FakeProvider extends AIProvider {
   constructor(id, { configured = true, health = {}, failures = {} } = {}) {
@@ -31,6 +32,19 @@ class FakeProvider extends AIProvider {
 }
 
 describe('AI provider fallback chain', () => {
+  it('configures the trained Qwen deployment as the first provider', () => {
+    const provider = createProvider();
+    expect(provider.id).toBe('hybrid');
+    expect(provider.providers.map(item => item.id)).toEqual([
+      'trained', 'nvidia', 'gemini', 'ollama-primary', 'ollama-fallback', 'none'
+    ]);
+    expect(provider.providers[0]).toMatchObject({ id: 'trained', chatModel: 'ip-sakti-qwen3-8b' });
+    expect(provider.providers[0].deployment).toMatchObject({
+      verified: false,
+      status: 'DEPLOYMENT_MANIFEST_MISSING'
+    });
+  });
+
   it('uses the trained local model before cloud and fallback providers', async () => {
     const trained = new FakeProvider('trained');
     const cloud = new FakeProvider('nvidia');

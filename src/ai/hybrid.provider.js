@@ -120,6 +120,7 @@ export class HybridProvider extends AIProvider {
           model: info.reasoningModel || null,
           embeddingModel: info.embeddingModel || null,
           baseURL: info.baseURL || null,
+          deployment: info.deployment || null,
           ...(unavailable || { status: 'CONFIG_MISSING', reason: 'Provider is not configured' })
         });
         continue;
@@ -130,6 +131,7 @@ export class HybridProvider extends AIProvider {
         model: info.reasoningModel || null,
         embeddingModel: info.embeddingModel || null,
         baseURL: info.baseURL || null,
+        deployment: info.deployment || null,
         ...health
       });
       if (health.connected) {

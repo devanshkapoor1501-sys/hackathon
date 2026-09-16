@@ -60,6 +60,7 @@ export async function llmHealth() {
   const info = active.getModelInfo();
   const health = await active.healthCheck();
   const activeAttempt = health.attempts?.find(attempt => attempt.provider === health.activeProvider);
+  const trainedAttempt = health.attempts?.find(attempt => attempt.provider === 'trained');
   const reportedProvider = health.activeProvider || (active.id === 'hybrid' ? null : active.id);
   const hasActiveProvider = Boolean(reportedProvider);
   return {
@@ -77,6 +78,9 @@ export async function llmHealth() {
     latencyMs: health.latencyMs ?? null,
     modelsAvailable: health.models || [],
     structuredOutput: health.structuredOutput || 'unknown',
+    trainedModel: trainedAttempt?.model || null,
+    trainedDeployment: trainedAttempt?.deployment || null,
+    trainedDeploymentStatus: trainedAttempt?.deployment?.status || trainedAttempt?.status || null,
     note: health.connected ? undefined
       : 'Assessment falls back to deterministic template output; no answers are fabricated.'
   };
