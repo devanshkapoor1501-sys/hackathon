@@ -21,8 +21,8 @@ Jurisdiction-aware prototype built for Smart India Hackathon Problem Statement *
 ### 1. Clone and install dependencies
 
 ```powershell
-git clone https://github.com/Tarundeep1357/IP-Sakati-Sahayak.git
-cd IP-Sakati-Sahayak
+git clone https://github.com/devanshkapoor1501-sys/hackathon.git
+cd hackathon
 npm ci
 npm --prefix dashboard ci
 ```
@@ -70,6 +70,16 @@ Seed the jurisdiction-tagged legal corpus once after MongoDB is available:
 ```powershell
 npm run seed:legal
 ```
+
+For the local SIH walkthrough, also seed the non-production demo accounts and
+their sample workspaces:
+
+```powershell
+npm run seed:demo
+```
+
+Demo accounts are exposed only outside production. Their credentials and roles
+are documented in [`docs/DEMO-ACCOUNTS.md`](docs/DEMO-ACCOUNTS.md).
 
 ### 4. Start the application
 
@@ -178,7 +188,7 @@ The app works with a local MongoDB (`docker compose up -d`) or Atlas. Atlas Vect
 ```
 Landing page → Start Assessment → Create case (natural language ± structured fields)
 → AI fact extraction → targeted clarifying questions (option chips, "Question 2 of 4")
-→ Product classification (deterministic engine) → Applicable Indian regimes
+→ Product classification (deterministic engine) → Applicable regimes for the selected jurisdiction
 → Hybrid retrieval over authoritative sources → citation verification
 → Risks + derived confidence → Action plan (each step explains WHY)
 → Human review escalation → Export PDF report
@@ -187,6 +197,12 @@ Landing page → Start Assessment → Create case (natural language ± structure
 Screens: Dashboard · New Case · My Cases · Case Workspace · Product Classification · IP Assessment · Regulatory Assessment · Evidence & Sources · Activity/Timeline · Settings · Legal Sources · Evaluation · System.
 
 The **IP-SAKTI Assistant** (in-case chat) answers follow-up questions strictly from the current case's verified information; offline it replies deterministically without fabricating anything.
+
+International mode keeps treaty and filing-system evidence separate from Indian
+authorities. The seeded international layer covers TRIPS, CBD/Nagoya,
+WIPO GRATK, PCT, Madrid, Hague and Budapest, plus selected target-market
+checklists. It is not a substitute for country-specific legal advice or
+national law that has not been seeded and verified.
 
 ---
 
@@ -209,6 +225,22 @@ Run the full test suite serially on Windows if your machine has limited memory:
 npm test -- --run --maxWorkers=1
 npm run dashboard:build
 ```
+
+Useful setup and corpus-maintenance commands are:
+
+```powershell
+npm run sources:manifest
+npm run sources:fetch -- --output-dir ./official-sources
+npm run training:prepare
+npm run training:validate -- --download-manifest ./official-sources/download-manifest.json
+```
+
+The source-fetch and training commands are optional. They build a provenance-
+tracked, review-gated Qwen dataset; they do not enable a trained model
+automatically. The model is admitted to the runtime chain only when
+`TRAINED_MODEL_ENABLED=true`, the configured model is reachable, and its
+deployment manifest has `deploymentGate.passed=true`. See
+[`training/README.md`](training/README.md).
 
 The test suite includes backend, deterministic assessment, AI fallback, summary, international planner, PDF, and dashboard smoke coverage. The production dashboard bundle is generated under `dashboard/dist`.
 
@@ -270,7 +302,7 @@ A 1-page **judge brief** for SIH evaluators is at [`docs/JUDGE-BRIEF.md`](docs/J
 | Retrieval | `src/retrieval/legal-retrieval.service.js` (BM25 ⊕ vector ⊕ authority ⊕ temporal) |
 | Evidence verification | `src/evidence/citation-verifier.js`, `timeline.js` |
 | LLM abstraction | `src/ai` (trained Qwen → NVIDIA → Gemini → Ollama → deterministic fallback; structured output with safe fallback) |
-| Indian legal corpus | `scripts/seed-legal-corpus.js` (+ admin ingestion via System page) |
+| Jurisdiction-tagged legal corpus | `scripts/seed-legal-corpus.js` (+ admin ingestion via System page) |
 | Training pipeline | `training/` and `scripts/prepare-training-data.js` (review-gated Qwen3-8B QLoRA preparation) |
 | Evaluation harness | `src/evaluation` |
 | Frontend | `dashboard/src` (React + Vite: `main.jsx` shell, `sahayak.jsx` workspace, `modules.jsx` pages) |
